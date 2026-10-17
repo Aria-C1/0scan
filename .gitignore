@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# 测试与工具缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 运行时生成物（报告 / 临时克隆）
+temp_repo/
+report_v3.html
+v5_report.html
+zeroscan-report*.html
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+*.swp
