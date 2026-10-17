@@ -6,6 +6,8 @@ import pytest
 
 from zeroscan.webapp import create_app
 
+from conftest import OLD_EMOJIS
+
 
 @pytest.fixture
 def client():
@@ -51,3 +53,20 @@ def test_unsafe_or_invalid_urls_rejected(url: str, client) -> None:
 
 def test_scan_is_post_only(client) -> None:
     assert client.get("/scan").status_code == 405
+
+
+def test_all_pages_use_svg_icons_and_font_stack_without_emoji(client) -> None:
+    """界面规范回归：三个页面（首页/报告/错误页）均使用 SVG 图标与
+    Noto Sans 字体栈，不出现旧版 emoji。"""
+    pages = (
+        client.get("/").get_data(as_text=True),
+        client.post("/scan", data={"url": "demo"}).get_data(as_text=True),
+        client.post("/scan", data={"url": "file:///etc"}).get_data(as_text=True),
+    )
+    for page in pages:
+        assert "<svg" in page
+        assert '"Noto Sans"' in page
+        assert "Microsoft YaHei" in page
+        assert "PingFang SC" in page
+        for emoji in OLD_EMOJIS:
+            assert emoji not in page, f"页面不应再使用 emoji: {emoji}"

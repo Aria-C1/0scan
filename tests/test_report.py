@@ -7,7 +7,7 @@ import json
 from zeroscan.report import render_html, render_json
 from zeroscan.scanner import Finding, ScanResult
 
-from conftest import FAKE_OPENAI, FAKE_PASSWORD
+from conftest import OLD_EMOJIS, FAKE_OPENAI, FAKE_PASSWORD
 
 _XSS_FILENAME = '<img src=x onerror="alert(1)">.py'
 
@@ -73,3 +73,20 @@ def test_json_output_roundtrip() -> None:
     assert data["findings"][0]["file"] == _XSS_FILENAME
     assert data["findings"][0]["masked_key"] == "hunt****ter2"
     assert FAKE_PASSWORD not in render_json(_result_with_xss_filename())
+
+
+def test_report_uses_svg_icons_and_font_stack_without_emoji() -> None:
+    """界面规范回归：SVG 图标 + Noto Sans 字体栈，禁用 emoji。"""
+    scenarios = (
+        ScanResult(target="x"),                          # 安全态
+        _result_with_xss_filename(),                     # 有发现
+        ScanResult(target="x", errors=["boom.py: 读取失败"]),  # 有错误
+    )
+    for result in scenarios:
+        page = render_html(result)
+        assert "<svg" in page
+        assert '"Noto Sans"' in page
+        assert "Microsoft YaHei" in page
+        assert "PingFang SC" in page
+        for emoji in OLD_EMOJIS:
+            assert emoji not in page, f"页面不应再使用 emoji: {emoji}"

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+{#
+    公共布局：Ant Design 5 风格设计令牌 + 页头/页脚 + 共享组件样式。
+    字体策略：本地字体栈（Noto Sans → 微软雅黑 → 苹方 → 系统），
+    不引入外部 webfont，保证 Termux / 离线 demo / 弱网环境可用。
+    样式必须内联：CLI --html 生成的是独立报告文件，不能依赖外部资源。
+#}
+{% from "_icons.html" import icon %}
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}0scan{% endblock %}</title>
+<style>
+    /* ---- 设计令牌（对齐 Ant Design 5）---- */
+    :root {
+        --zs-primary: #1677ff;
+        --zs-primary-hover: #4096ff;
+        --zs-primary-bg: #e6f4ff;
+        --zs-success: #52c41a;
+        --zs-success-bg: #f6ffed;
+        --zs-error: #ff4d4f;
+        --zs-error-deep: #cf1322;
+        --zs-error-bg: #fff1f0;
+        --zs-error-border: #ffccc7;
+        --zs-warning: #faad14;
+        --zs-warning-bg: #fffbe6;
+        --zs-warning-border: #ffe58f;
+        --zs-text: #1f1f1f;
+        --zs-text-secondary: #8c8c8c;
+        --zs-text-tertiary: #bfbfbf;
+        --zs-bg-layout: #f5f5f5;
+        --zs-bg-container: #ffffff;
+        --zs-bg-code: #fafafa;
+        --zs-border: #f0f0f0;
+        --zs-border-strong: #d9d9d9;
+        --zs-radius: 6px;
+        --zs-radius-lg: 8px;
+        --zs-shadow: 0 1px 2px rgba(0,0,0,.03), 0 1px 6px -1px rgba(0,0,0,.02), 0 2px 4px rgba(0,0,0,.02);
+        --zs-font: "Noto Sans", "Noto Sans SC", "Microsoft YaHei", "微软雅黑", "PingFang SC", "苹方", -apple-system, "Segoe UI", sans-serif;
+        --zs-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    /* ---- 基础 ---- */
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+        margin: 0;
+        font-family: var(--zs-font);
+        font-size: 14px;
+        line-height: 1.667;
+        color: var(--zs-text);
+        background: var(--zs-bg-layout);
+    }
+    h1, h2, h3 { margin: 0; }
+    p { margin: 0; }
+    a { color: var(--zs-primary); text-decoration: none; }
+
+    /* ---- 图标 ---- */
+    .zs-icon { width: 1em; height: 1em; vertical-align: -.125em; flex: none; }
+
+    /* ---- 页头 / 页脚 / 主区 ---- */
+    .zs-header { background: var(--zs-bg-container); border-bottom: 1px solid var(--zs-border); }
+    .zs-header-inner {
+        display: flex; align-items: center; gap: 10px;
+        max-width: 1200px; margin: 0 auto; padding: 0 16px; height: 56px;
+    }
+    .zs-brand { display: flex; align-items: center; gap: 8px; color: var(--zs-text); }
+    .zs-brand-icon { display: flex; color: var(--zs-primary); font-size: 20px; }
+    .zs-brand-name { font-size: 16px; font-weight: 600; letter-spacing: .2px; }
+    .zs-brand-tag {
+        font-size: 12px; line-height: 20px; padding: 0 6px;
+        color: var(--zs-text-secondary);
+        border: 1px solid var(--zs-border-strong); border-radius: 4px;
+    }
+    .zs-header-right { margin-left: auto; font-size: 12px; color: var(--zs-text-tertiary); }
+    .zs-main { min-height: calc(100vh - 160px); padding: 24px 0 48px; }
+    .zs-container { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+    .zs-footer {
+        padding: 16px; text-align: center;
+        font-size: 12px; color: var(--zs-text-tertiary);
+    }
+
+    /* ---- 按钮 ---- */
+    .zs-btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        height: 40px; padding: 0 16px; min-width: 0;
+        border: 1px solid var(--zs-border-strong); border-radius: var(--zs-radius);
+        background: var(--zs-bg-container); color: var(--zs-text);
+        font-family: inherit; font-size: 14px; font-weight: 500;
+        cursor: pointer; transition: all .2s; text-decoration: none;
+    }
+    .zs-btn:hover { border-color: var(--zs-primary); color: var(--zs-primary); }
+    .zs-btn:active { transform: translateY(.5px); }
+    .zs-btn-primary { background: var(--zs-primary); border-color: var(--zs-primary); color: #fff; }
+    .zs-btn-primary:hover { background: var(--zs-primary-hover); border-color: var(--zs-primary-hover); color: #fff; }
+    .zs-btn-primary:disabled { background: #91caff; border-color: #91caff; color: #fff; cursor: not-allowed; }
+    .zs-btn-block { width: 100%; }
+    .zs-btn-spin {
+        display: none; width: 14px; height: 14px;
+        border: 2px solid rgba(255,255,255,.45); border-top-color: #fff;
+        border-radius: 50%; animation: zs-spin .8s linear infinite;
+    }
+    .zs-btn-loading .zs-btn-spin { display: inline-block; }
+    @keyframes zs-spin { to { transform: rotate(360deg); } }
+
+    /* ---- 输入框 ---- */
+    .zs-label { display: block; margin-bottom: 8px; font-size: 14px; }
+    .zs-input-affix { position: relative; }
+    .zs-input-prefix {
+        position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+        display: flex; color: var(--zs-text-tertiary); pointer-events: none;
+    }
+    .zs-input-affix input {
+        width: 100%; height: 40px; padding: 4px 12px 4px 36px;
+        border: 1px solid var(--zs-border-strong); border-radius: var(--zs-radius);
+        background: var(--zs-bg-container); color: var(--zs-text);
+        font-family: inherit; font-size: 14px; outline: none; transition: all .2s;
+    }
+    .zs-input-affix input::placeholder { color: var(--zs-text-tertiary); }
+    .zs-input-affix input:hover { border-color: var(--zs-primary-hover); }
+    .zs-input-affix input:focus { border-color: var(--zs-primary); box-shadow: 0 0 0 2px rgba(5,145,255,.1); }
+
+    /* ---- 卡片 / 标签 / 代码 ---- */
+    .zs-card { background: var(--zs-bg-container); border-radius: var(--zs-radius-lg); box-shadow: var(--zs-shadow); }
+    .zs-tag {
+        display: inline-flex; align-items: center; gap: 4px;
+        height: 22px; padding: 0 8px; border-radius: 4px;
+        font-size: 12px; font-weight: 500;
+        background: var(--zs-primary-bg); color: var(--zs-primary);
+    }
+    .zs-tag-error {
+        background: var(--zs-error-bg); color: var(--zs-error-deep);
+        border: 1px solid var(--zs-error-border);
+    }
+    code {
+        margin: 0 2px; padding: 1px 6px;
+        background: rgba(0,0,0,.04); border-radius: 4px;
+        font-family: var(--zs-font-mono); font-size: 90%;
+        word-break: break-all;
+    }
+    .zs-pre {
+        margin: 0; padding: 12px 16px;
+        background: var(--zs-bg-code); border: 1px solid var(--zs-border);
+        border-radius: var(--zs-radius);
+        font-family: var(--zs-font-mono); font-size: 12px; line-height: 1.667;
+        color: var(--zs-text); overflow-x: auto;
+        white-space: pre-wrap; word-break: break-all;
+    }
+
+    /* ---- Alert 警示面板 ---- */
+    .zs-alert { display: flex; gap: 12px; padding: 12px 16px; border-radius: var(--zs-radius); border: 1px solid; }
+    .zs-alert-warning { background: var(--zs-warning-bg); border-color: var(--zs-warning-border); }
+    .zs-alert-icon { display: flex; margin-top: 2px; font-size: 16px; color: var(--zs-warning); }
+    .zs-alert-title { font-size: 14px; font-weight: 500; }
+    .zs-alert-desc { margin-top: 4px; font-size: 13px; color: var(--zs-text-secondary); }
+    .zs-alert ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: var(--zs-text-secondary); word-break: break-all; }
+
+    /* ---- Result 结果态 ---- */
+    .zs-result { text-align: center; padding: 40px 16px; }
+    .zs-result-icon {
+        display: flex; align-items: center; justify-content: center;
+        width: 72px; height: 72px; margin: 0 auto 16px;
+        border-radius: 50%; font-size: 36px;
+    }
+    .zs-result-success .zs-result-icon { background: var(--zs-success-bg); color: var(--zs-success); }
+    .zs-result-error .zs-result-icon { background: var(--zs-error-bg); color: var(--zs-error); }
+    .zs-result-title { font-size: clamp(18px, 4vw, 20px); font-weight: 600; margin-bottom: 8px; }
+    .zs-result-subtitle {
+        max-width: 480px; margin: 0 auto 20px;
+        font-size: 13px; color: var(--zs-text-secondary);
+        white-space: pre-wrap; word-break: break-word;
+    }
+
+    /* ---- 响应式（断点对齐 AntD）---- */
+    @media (min-width: 576px) {
+        .zs-container, .zs-header-inner { padding-left: 24px; padding-right: 24px; }
+    }
+    @media (min-width: 768px) {
+        .zs-container, .zs-header-inner { padding-left: 32px; padding-right: 32px; }
+    }
+    @media (max-width: 480px) {
+        .zs-header-right { display: none; }
+    }
+
+    {% block style %}{% endblock %}
+</style>
+</head>
+<body>
+<header class="zs-header">
+    <div class="zs-header-inner">
+        <span class="zs-brand">
+            <span class="zs-brand-icon">{{ icon('shield') }}</span>
+            <span class="zs-brand-name">0scan</span>
+            <span class="zs-brand-tag">代码安检</span>
+        </span>
+        <span class="zs-header-right">所有输出均已脱敏</span>
+    </div>
+</header>
+<main class="zs-main">
+    {% block content %}{% endblock %}
+</main>
+<footer class="zs-footer">0scan · Mobile-first Secret Scanner</footer>
+{% block script %}{% endblock %}
+</body>
+</html>

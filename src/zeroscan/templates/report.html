@@ -1,58 +1,132 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>0scan 安检报告</title>
-<style>
-    body { font-family: -apple-system, "Segoe UI", sans-serif; background: #f4f4f9; padding: 20px; margin: 0; }
-    h1 { color: #1a1a1a; font-size: 22px; }
-    .meta { color: #666; font-size: 13px; }
-    .card { background: white; border-left: 5px solid #ff4757; padding: 15px; margin-bottom: 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .safe { border-left: 5px solid #2ed573; text-align: center; padding: 40px; }
-    .warn { border-left: 5px solid #ffa502; text-align: center; padding: 40px; }
-    .tag { background: #ffe0e0; color: #ff4757; padding: 2px 8px; border-radius: 3px; font-weight: bold; font-size: 12px; }
-    pre { background: #2f3542; color: #dfe4ea; padding: 10px; border-radius: 5px; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
-    code { background: #eef0f4; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
-    .btn { display: inline-block; background: #2f3542; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-bottom: 20px; font-size: 14px; }
-    .errors { background: #fff5e6; border: 1px solid #ffa502; border-radius: 5px; padding: 15px; margin-bottom: 20px; }
-    .errors h2 { color: #b06f00; font-size: 16px; margin-top: 0; }
-    .errors ul { margin: 8px 0 0; padding-left: 20px; color: #7a5b00; font-size: 13px; }
-</style>
-</head>
-<body>
-{% if web_mode %}<a href="/" class="btn">⬅️ 返回重新扫描</a>{% endif %}
-<h1>🛡️ 0scan 代码安检报告</h1>
-<p class="meta">
-    目标：<code>{{ result.target }}</code> ·
-    扫描 {{ result.scanned_files }} 个文件（跳过 {{ result.skipped_files }} 个）·
-    耗时 {{ result.elapsed_seconds }}s
-</p>
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}0scan 安检报告{% endblock %}
+{% block style %}
+    .zs-back { margin-bottom: 16px; }
+    .zs-pagehead { margin-bottom: 16px; }
+    .zs-pagehead h1 {
+        display: flex; align-items: center; gap: 8px;
+        font-size: clamp(20px, 4vw, 24px); font-weight: 600;
+        margin-bottom: 4px; letter-spacing: .2px;
+    }
+    .zs-pagehead-icon { display: flex; font-size: 24px; color: var(--zs-primary); }
+    .zs-pagehead-meta {
+        font-size: 13px; color: var(--zs-text-secondary);
+        word-break: break-all;
+    }
+    .zs-stat-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+        margin-bottom: 16px;
+    }
+    .zs-stat { padding: 16px; }
+    .zs-stat-value {
+        font-size: clamp(22px, 5vw, 28px); font-weight: 600; line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+    }
+    .zs-stat-danger .zs-stat-value { color: var(--zs-error); }
+    .zs-stat-label {
+        display: flex; align-items: center; gap: 4px;
+        margin-top: 4px; font-size: 12px; color: var(--zs-text-secondary);
+    }
+    .zs-findings-count { margin-bottom: 12px; font-size: 13px; color: var(--zs-text-secondary); }
+    .zs-findings-count strong { color: var(--zs-error-deep); font-size: 16px; }
+    .zs-finding {
+        padding: 16px; margin-bottom: 12px;
+        border-left: 3px solid var(--zs-error);
+    }
+    .zs-finding-head {
+        display: flex; flex-wrap: wrap; align-items: center;
+        justify-content: space-between; gap: 8px 12px; margin-bottom: 12px;
+    }
+    .zs-finding-pos { font-size: 12px; color: var(--zs-text-secondary); word-break: break-all; }
+    .zs-meta-row {
+        display: flex; align-items: flex-start; gap: 8px;
+        margin-bottom: 8px; font-size: 13px;
+    }
+    .zs-meta-icon { display: flex; margin-top: 3px; font-size: 14px; color: var(--zs-text-tertiary); }
+    .zs-finding .zs-pre { margin-top: 4px; }
+    @media (min-width: 768px) {
+        .zs-stat-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+{% endblock %}
+{% block content %}
+<div class="zs-container">
+    {% if web_mode %}
+    <a href="/" class="zs-btn zs-back">{{ icon('arrow-left') }}<span>返回重新扫描</span></a>
+    {% endif %}
 
-{% if result.errors %}
-<section class="errors">
-    <h2>⚠️ 扫描过程中出现 {{ result.errors | length }} 个错误</h2>
-    <p>以下问题可能导致漏报，本次结果不构成"安全"结论：</p>
-    <ul>
-        {% for err in result.errors %}<li>{{ err }}</li>{% endfor %}
-    </ul>
-</section>
-{% endif %}
+    <div class="zs-pagehead">
+        <h1><span class="zs-pagehead-icon">{{ icon('shield') }}</span>代码安检报告</h1>
+        <p class="zs-pagehead-meta">目标：<code>{{ result.target }}</code></p>
+    </div>
 
-{% if result.findings %}
-<p>共发现 <strong>{{ result.findings | length }}</strong> 处潜在风险：</p>
-{% for item in result.findings %}
-<div class="card">
-    <span class="tag">{{ item.detector }}</span>
-    <p>📁 文件：<code>{{ item.file }}</code>（第 {{ item.line }} 行）</p>
-    <p>🔑 提取凭证：<strong>{{ item.masked_key }}</strong></p>
-    <pre>{{ item.context }}</pre>
+    <div class="zs-stat-grid">
+        <div class="zs-card zs-stat zs-stat-danger">
+            <div class="zs-stat-value">{{ result.findings | length }}</div>
+            <div class="zs-stat-label">{{ icon('alert-circle') }}潜在风险</div>
+        </div>
+        <div class="zs-card zs-stat">
+            <div class="zs-stat-value">{{ result.scanned_files }}</div>
+            <div class="zs-stat-label">{{ icon('file-text') }}已扫描文件</div>
+        </div>
+        <div class="zs-card zs-stat">
+            <div class="zs-stat-value">{{ result.skipped_files }}</div>
+            <div class="zs-stat-label">{{ icon('minus-circle') }}已跳过文件</div>
+        </div>
+        <div class="zs-card zs-stat">
+            <div class="zs-stat-value">{{ result.elapsed_seconds }}s</div>
+            <div class="zs-stat-label">{{ icon('clock') }}耗时</div>
+        </div>
+    </div>
+
+    {% if result.errors %}
+    <div class="zs-alert zs-alert-warning">
+        <span class="zs-alert-icon">{{ icon('alert-triangle') }}</span>
+        <div>
+            <div class="zs-alert-title">扫描过程中出现 {{ result.errors | length }} 个错误</div>
+            <p class="zs-alert-desc">以下问题可能导致漏报，本次结果不构成"安全"结论：</p>
+            <ul>
+                {% for err in result.errors %}<li>{{ err }}</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if result.findings %}
+    <p class="zs-findings-count">共发现 <strong>{{ result.findings | length }}</strong> 处潜在风险：</p>
+    {% for item in result.findings %}
+    <div class="zs-card zs-finding">
+        <div class="zs-finding-head">
+            <span class="zs-tag zs-tag-error">{{ item.detector }}</span>
+            <span class="zs-finding-pos">{{ item.file }} · 第 {{ item.line }} 行</span>
+        </div>
+        <div class="zs-meta-row">
+            <span class="zs-meta-icon">{{ icon('file-text') }}</span>
+            <span>文件：<code>{{ item.file }}</code>（第 {{ item.line }} 行）</span>
+        </div>
+        <div class="zs-meta-row">
+            <span class="zs-meta-icon">{{ icon('key') }}</span>
+            <span>提取凭证：<code>{{ item.masked_key }}</code></span>
+        </div>
+        <pre class="zs-pre">{{ item.context }}</pre>
+    </div>
+    {% endfor %}
+    {% elif result.ok %}
+    <div class="zs-card">
+        <div class="zs-result zs-result-success">
+            <div class="zs-result-icon">{{ icon('check-circle') }}</div>
+            <h2 class="zs-result-title">未发现高危硬编码密钥或密码。</h2>
+            <p class="zs-result-subtitle">扫描完成，未检出已知格式的硬编码凭证；占位符与噪声文件已自动过滤。</p>
+        </div>
+    </div>
+    {% else %}
+    <div class="zs-card">
+        <div class="zs-result zs-result-error">
+            <div class="zs-result-icon">{{ icon('alert-circle') }}</div>
+            <h2 class="zs-result-title">未能完成完整扫描。</h2>
+            <p class="zs-result-subtitle">请先处理上方错误后再下结论。</p>
+        </div>
+    </div>
+    {% endif %}
 </div>
-{% endfor %}
-{% elif result.ok %}
-<div class="card safe"><h2>✅ 未发现高危硬编码密钥或密码。</h2></div>
-{% else %}
-<div class="card warn"><h2>⚠️ 未能完成完整扫描，请先处理上方错误后再下结论。</h2></div>
-{% endif %}
-</body>
-</html>
+{% endblock %}

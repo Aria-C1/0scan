@@ -1,22 +1,18 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>0scan - 获取目标失败</title>
-<style>
-    body { font-family: -apple-system, "Segoe UI", sans-serif; background: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-    .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); text-align: center; width: 80%; max-width: 520px; }
-    h1 { color: #1a1a1a; font-size: 22px; }
-    p { color: #666; font-size: 14px; line-height: 1.6; word-break: break-all; }
-    .btn { display: inline-block; background: #1a1a1a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: 600; margin-top: 15px; }
-</style>
-</head>
-<body>
-    <div class="container">
-        <h1>😢 获取目标失败</h1>
-        <p>{{ message }}</p>
-        <a href="/" class="btn">返回重试</a>
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}0scan - 获取目标失败{% endblock %}
+{% block style %}
+    .zs-error-wrap { max-width: 560px; margin: 24px auto 0; }
+{% endblock %}
+{% block content %}
+<div class="zs-container">
+    <div class="zs-card zs-error-wrap">
+        <div class="zs-result zs-result-error">
+            <div class="zs-result-icon">{{ icon('x-circle') }}</div>
+            <h1 class="zs-result-title">获取目标失败</h1>
+            <p class="zs-result-subtitle">{{ message }}</p>
+            <a href="/" class="zs-btn">{{ icon('arrow-left') }}<span>返回重试</span></a>
+        </div>
     </div>
-</body>
-</html>
+</div>
+{% endblock %}

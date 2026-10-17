@@ -21,6 +21,11 @@ FAKE_PASSWORD = "hunter2hunter2hunter2"
 
 ALL_FAKE_SECRETS = (FAKE_OPENAI, FAKE_AWS, FAKE_GITHUB, FAKE_GOOGLE, FAKE_PASSWORD)
 
+#: 旧版界面使用过的 emoji，重设计后页面中不得再出现
+OLD_EMOJIS = (
+    "🛡️", "📁", "🔑", "⬅️", "⚠", "✅", "😢", "🚀", "🎯", "📄", "👀", "💡", "⚠️",
+)
+
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
