@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>0scan 安检报告</title>
+<style>
+    body { font-family: -apple-system, "Segoe UI", sans-serif; background: #f4f4f9; padding: 20px; margin: 0; }
+    h1 { color: #1a1a1a; font-size: 22px; }
+    .meta { color: #666; font-size: 13px; }
+    .card { background: white; border-left: 5px solid #ff4757; padding: 15px; margin-bottom: 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .safe { border-left: 5px solid #2ed573; text-align: center; padding: 40px; }
+    .warn { border-left: 5px solid #ffa502; text-align: center; padding: 40px; }
+    .tag { background: #ffe0e0; color: #ff4757; padding: 2px 8px; border-radius: 3px; font-weight: bold; font-size: 12px; }
+    pre { background: #2f3542; color: #dfe4ea; padding: 10px; border-radius: 5px; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+    code { background: #eef0f4; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+    .btn { display: inline-block; background: #2f3542; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-bottom: 20px; font-size: 14px; }
+    .errors { background: #fff5e6; border: 1px solid #ffa502; border-radius: 5px; padding: 15px; margin-bottom: 20px; }
+    .errors h2 { color: #b06f00; font-size: 16px; margin-top: 0; }
+    .errors ul { margin: 8px 0 0; padding-left: 20px; color: #7a5b00; font-size: 13px; }
+</style>
+</head>
+<body>
+{% if web_mode %}<a href="/" class="btn">⬅️ 返回重新扫描</a>{% endif %}
+<h1>🛡️ 0scan 代码安检报告</h1>
+<p class="meta">
+    目标：<code>{{ result.target }}</code> ·
+    扫描 {{ result.scanned_files }} 个文件（跳过 {{ result.skipped_files }} 个）·
+    耗时 {{ result.elapsed_seconds }}s
+</p>
+
+{% if result.errors %}
+<section class="errors">
+    <h2>⚠️ 扫描过程中出现 {{ result.errors | length }} 个错误</h2>
+    <p>以下问题可能导致漏报，本次结果不构成"安全"结论：</p>
+    <ul>
+        {% for err in result.errors %}<li>{{ err }}</li>{% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if result.findings %}
+<p>共发现 <strong>{{ result.findings | length }}</strong> 处潜在风险：</p>
+{% for item in result.findings %}
+<div class="card">
+    <span class="tag">{{ item.detector }}</span>
+    <p>📁 文件：<code>{{ item.file }}</code>（第 {{ item.line }} 行）</p>
+    <p>🔑 提取凭证：<strong>{{ item.masked_key }}</strong></p>
+    <pre>{{ item.context }}</pre>
+</div>
+{% endfor %}
+{% elif result.ok %}
+<div class="card safe"><h2>✅ 未发现高危硬编码密钥或密码。</h2></div>
+{% else %}
+<div class="card warn"><h2>⚠️ 未能完成完整扫描，请先处理上方错误后再下结论。</h2></div>
+{% endif %}
+</body>
+</html>

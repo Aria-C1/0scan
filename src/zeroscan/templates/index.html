@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>0scan - 代码安检</title>
+    <style>
+        body { font-family: -apple-system, "Segoe UI", sans-serif; background: #f4f4f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); text-align: center; width: 100%; max-width: 500px; }
+        h1 { color: #1a1a1a; font-size: 24px; }
+        p { color: #666; font-size: 14px; margin-bottom: 25px; line-height: 1.6; }
+        input[type="text"] { width: 90%; padding: 14px; margin-bottom: 20px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 16px; outline: none; transition: 0.3s; box-sizing: border-box; }
+        input[type="text"]:focus { border-color: #000; }
+        button { background: #1a1a1a; color: white; border: none; padding: 14px 40px; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s ease; width: 90%; }
+        button:hover { background: #333; }
+        button:active { background: #555; transform: scale(0.98); }
+        button:disabled { background: #999; cursor: not-allowed; }
+        .hint { font-size: 12px; color: #999; margin-top: 15px; }
+        code { background: #eef0f4; padding: 1px 5px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>0scan 代码安检</h1>
+        <p>输入 GitHub 仓库地址开始扫描；<br>或输入 <code>demo</code> 离线体验（不联网）。</p>
+        <form action="/scan" method="post" onsubmit="showLoading()">
+            <input type="text" name="url" placeholder="https://github.com/owner/repo" required>
+            <button type="submit" id="scanBtn">开始扫描</button>
+        </form>
+        <p class="hint">克隆较大仓库可能较慢，请耐心等待。仅支持 GitHub https 地址。</p>
+    </div>
+    <script>
+        function showLoading() {
+            var btn = document.getElementById('scanBtn');
+            btn.disabled = true;
+            btn.innerHTML = '等待中...';
+        }
+    </script>
+</body>
+</html>
