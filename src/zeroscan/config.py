@@ -33,10 +33,16 @@ EXCLUDED_SUFFIXES: frozenset[str] = frozenset({
 
 # --- 占位符过滤：密钥值命中这些规则的视为示例代码，不报告 ---
 # 旧版本对整行内容做子串匹配，导致"行内含 test 就误杀整条真实密钥"；
-# 现在只针对密钥值本身判断。
-#: 值中包含即视为占位符
+# 现在只针对密钥值本身判断，且按证据强度分级：
+#: 强标记：出现即几乎必然是示例代码，适用于所有凭证类型
 PLACEHOLDER_SUBSTRINGS: tuple[str, ...] = (
-    "123456", "xxxxxx", "your_api_key", "your_", "placeholder",
+    "your_api_key", "your_", "placeholder",
+)
+#: 弱标记：只对自由文本（如密码）生效；
+#: 结构化密钥（sk-/AKIA/ghp_ 等格式约束已足够强）不做弱标记过滤，
+#: 否则随机密钥恰好包含 "123456" 等子串时会被误杀（测试实际暴露过）。
+WEAK_PLACEHOLDER_SUBSTRINGS: tuple[str, ...] = (
+    "123456", "xxxxxx",
 )
 #: 值完全相等才视为占位符（避免误杀真实密钥）
 PLACEHOLDER_EXACT: frozenset[str] = frozenset({

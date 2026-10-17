@@ -14,7 +14,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .config import PLACEHOLDER_EXACT, PLACEHOLDER_SUBSTRINGS
+from .config import (
+    PLACEHOLDER_EXACT,
+    PLACEHOLDER_SUBSTRINGS,
+    WEAK_PLACEHOLDER_SUBSTRINGS,
+)
 
 
 def mask_value(value: str) -> str:
@@ -34,6 +38,10 @@ class Detector:
     pattern: re.Pattern[str]
     #: 捕获真正密钥值的分组编号（0 = 整个匹配）
     value_group: int = 0
+    #: 是否为结构化密钥（格式本身即强证据，如 sk-/AKIA/ghp_）。
+    #: 结构化密钥不做弱标记占位符过滤，避免随机值碰巧含
+    #: "123456" 等子串时被误杀；自由文本（密码）仍需弱标记过滤。
+    structured: bool = True
 
     def value(self, match: re.Match[str]) -> str:
         return match.group(self.value_group)
@@ -46,7 +54,11 @@ class Detector:
         lowered = value.lower()
         if lowered in PLACEHOLDER_EXACT:
             return True
-        return any(token in lowered for token in PLACEHOLDER_SUBSTRINGS)
+        if any(token in lowered for token in PLACEHOLDER_SUBSTRINGS):
+            return True
+        if not self.structured:
+            return any(token in lowered for token in WEAK_PLACEHOLDER_SUBSTRINGS)
+        return False
 
     def mask_line(self, line: str) -> str:
         """把一行内命中的所有密钥值替换为打码形式（其余内容原样保留）。"""
@@ -79,5 +91,6 @@ DETECTORS: tuple[Detector, ...] = (
         name="Hardcoded Password",
         pattern=re.compile(r"""(?i)\bpassword\b\s*=\s*['"]([^$'"\s][^'"]*)['"]"""),
         value_group=1,
+        structured=False,
     ),
 )
