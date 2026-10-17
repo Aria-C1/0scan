@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}0scan - 代码安检{% endblock %}
+{% block style %}
+    .zs-hero { max-width: 440px; margin: 0 auto; }
+    .zs-hero-card { padding: 32px 24px; }
+    .zs-hero-badge {
+        display: flex; align-items: center; justify-content: center;
+        width: 56px; height: 56px; margin: 0 auto 16px;
+        border-radius: 14px; background: var(--zs-primary-bg); color: var(--zs-primary);
+        font-size: 28px;
+    }
+    .zs-hero-title {
+        font-size: clamp(20px, 5vw, 24px); font-weight: 600;
+        text-align: center; margin-bottom: 8px; letter-spacing: .2px;
+    }
+    .zs-hero-desc {
+        text-align: center; color: var(--zs-text-secondary);
+        margin-bottom: 24px; font-size: 13px;
+    }
+    .zs-hero-card .zs-btn-block { margin-top: 16px; }
+    .zs-hero-hint {
+        margin-top: 16px; text-align: center;
+        font-size: 12px; color: var(--zs-text-tertiary);
+    }
+    .zs-features {
+        display: grid; grid-template-columns: 1fr; gap: 12px;
+        max-width: 760px; margin: 24px auto 0; padding: 0; list-style: none;
+    }
+    .zs-feature {
+        display: flex; align-items: flex-start; gap: 10px;
+        padding: 12px 16px;
+        background: var(--zs-bg-container);
+        border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
+    }
+    .zs-feature-icon { display: flex; margin-top: 3px; font-size: 16px; color: var(--zs-primary); }
+    .zs-feature b { display: block; font-size: 13px; font-weight: 500; }
+    .zs-feature span { display: block; font-size: 12px; color: var(--zs-text-secondary); }
+    @media (min-width: 768px) {
+        .zs-features { grid-template-columns: repeat(3, 1fr); }
+        .zs-hero-card { padding: 40px 32px; }
+    }
+{% endblock %}
+{% block content %}
+<div class="zs-container">
+    <div class="zs-hero">
+        <div class="zs-card zs-hero-card">
+            <div class="zs-hero-badge">{{ icon('shield') }}</div>
+            <h1 class="zs-hero-title">0scan 代码安检</h1>
+            <p class="zs-hero-desc">
+                输入 GitHub 仓库地址，扫描硬编码密钥与密码；<br>
+                或输入 <code>demo</code> 离线体验（不联网）。
+            </p>
+            <form action="/scan" method="post" onsubmit="showLoading()">
+                <label class="zs-label" for="url">仓库地址</label>
+                <div class="zs-input-affix">
+                    <span class="zs-input-prefix">{{ icon('search') }}</span>
+                    <input id="url" type="text" name="url" placeholder="https://github.com/owner/repo" required autocomplete="off">
+                </div>
+                <button type="submit" id="scanBtn" class="zs-btn zs-btn-primary zs-btn-block">
+                    <span class="zs-btn-spin" aria-hidden="true"></span>
+                    <span id="scanBtnText">开始扫描</span>
+                </button>
+            </form>
+            <p class="zs-hero-hint">克隆较大仓库可能较慢，请耐心等待 · 仅支持 GitHub https 地址</p>
+        </div>
+        <ul class="zs-features">
+            <li class="zs-feature">
+                <span class="zs-feature-icon">{{ icon('key') }}</span>
+                <div><b>五类凭证检测</b><span>OpenAI · AWS · GitHub · Google · 硬编码密码</span></div>
+            </li>
+            <li class="zs-feature">
+                <span class="zs-feature-icon">{{ icon('shield') }}</span>
+                <div><b>全量脱敏输出</b><span>密钥与上下文一律打码后呈现</span></div>
+            </li>
+            <li class="zs-feature">
+                <span class="zs-feature-icon">{{ icon('check-circle') }}</span>
+                <div><b>离线 demo 模式</b><span>输入 demo 无需联网即可体验</span></div>
+            </li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+{% block script %}
+<script>
+    function showLoading() {
+        var btn = document.getElementById('scanBtn');
+        btn.disabled = true;
+        btn.classList.add('zs-btn-loading');
+        document.getElementById('scanBtnText').textContent = '扫描中...';
+    }
+</script>
+{% endblock %}
