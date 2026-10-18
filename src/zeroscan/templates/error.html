@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}0scan - 获取目标失败{% endblock %}
+{% block style %}
+    .zs-error-wrap { max-width: 560px; margin: 24px auto 0; }
+{% endblock %}
+{% block content %}
+<div class="zs-container">
+    <div class="zs-card zs-error-wrap">
+        <div class="zs-result zs-result-error">
+            <div class="zs-result-icon">{{ icon('x-circle') }}</div>
+            <h1 class="zs-result-title">获取目标失败</h1>
+            <p class="zs-result-subtitle">{{ message }}</p>
+            <a href="/" class="zs-btn">{{ icon('arrow-left') }}<span>返回重试</span></a>
+        </div>
+    </div>
+</div>
+{% endblock %}
