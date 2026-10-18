@@ -93,3 +93,7 @@ Contributions welcome — new detectors, entropy analysis, and more report forma
 ## 📄 License / 许可证
 
 MIT — see [LICENSE](LICENSE). Added by the rewrite; the maintainer's confirmation is noted in the corresponding PR. / MIT 许可证（本次重写新增，已在对应 PR 中请维护者确认）。
+
+## ☕ Support / 赞助支持
+如果你觉得这个工具对你有帮助，欢迎在爱发电请我喝杯可乐：
+👉 https://afdian.com/a/Aria-C
