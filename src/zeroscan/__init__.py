@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 from .detectors import DETECTORS, Detector, mask_value
 from .history import scan_history

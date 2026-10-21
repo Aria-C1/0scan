@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zeroscan"
-version = "1.0.0"
+version = "1.1.0"
 description = "Mobile-first secret scanner: hunt hardcoded API keys and passwords in GitHub repositories"
 readme = "README.md"
 requires-python = ">=3.12"
