@@ -1,0 +1,28 @@
+# 版本控制与本地环境
+.git
+.gitignore
+.venv
+venv
+env
+
+# Python 缓存与构建产物
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# 测试与 CI（镜像只需运行时）
+tests
+
+# 生成物与编辑器
+zeroscan-report*.html
+.idea
+.vscode
+.DS_Store
+*.swp
