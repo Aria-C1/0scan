@@ -12,10 +12,13 @@ import argparse
 import sys
 
 from . import __version__
+from .detectors import DETECTORS, Detector
 from .history import scan_history
 from .repo import RepoError, fetch_repo
 from .report import render_json, write_html
+from .rules import RuleError, load_custom_detectors
 from .scanner import Scanner
+from .config import RULES_FILE
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan_p.add_argument("target", help="GitHub https 地址、本地路径，或 demo（离线演示）")
     scan_p.add_argument("--json", action="store_true", help="以 JSON 输出结果")
     scan_p.add_argument("--html", metavar="PATH", help="同时生成 HTML 报告文件")
+    scan_p.add_argument("--config", metavar="PATH", help="自定义规则文件 zeroscan.toml（默认自动加载当前目录）")
     scan_p.add_argument("--full-history", action="store_true", help="完整克隆并扫描全部提交历史（较慢）")
     scan_p.add_argument("--timeout", type=int, default=60, help="克隆超时秒数（默认 60）")
     scan_p.set_defaults(func=cmd_scan)
@@ -43,7 +47,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
-    scanner = Scanner()
+    detectors = _resolve_detectors(args.config)
+    if detectors is None:
+        return 2
+    scanner = Scanner(detectors=detectors)
     try:
         with fetch_repo(args.target, full_history=args.full_history) as repo_dir:
             result = scanner.scan_path(repo_dir, target_label=args.target.strip())
@@ -67,6 +74,20 @@ def cmd_scan(args: argparse.Namespace) -> int:
         print(f"📄 HTML 报告已生成：{path}")
 
     return 1 if result.findings else 0
+
+
+def _resolve_detectors(config_arg: str | None) -> tuple[Detector, ...] | None:
+    """合并自定义规则；--config 优先，否则尝试当前目录 zeroscan.toml。"""
+    path = Path(config_arg) if config_arg else Path(RULES_FILE)
+    if not path.exists():
+        return DETECTORS
+    try:
+        detectors = load_custom_detectors(path)
+    except RuleError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return None
+    print(f"已加载自定义规则 {len(detectors) - len(DETECTORS)} 条（{path}）")
+    return detectors
 
 
 def _print_summary(result) -> None:

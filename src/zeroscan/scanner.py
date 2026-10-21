@@ -26,9 +26,11 @@ from .config import (
     EXCLUDED_DIRS,
     EXCLUDED_SUFFIXES,
     HIGH_VALUE_FILE_PATTERNS,
+    IGNORE_FILE,
     ScanLimits,
 )
 from .detectors import DETECTORS, Detector, mask_value
+from .rules import apply_ignore, load_ignore_rules
 
 #: 读取多少字节用于嗅探二进制文件
 _BINARY_SNIFF_BYTES = 8192
@@ -154,6 +156,9 @@ class Scanner:
                     result.scanned_files += outcome.scanned
                     result.skipped_files += outcome.skipped
                     result.findings.extend(outcome.findings)
+        ignore_rules = load_ignore_rules(root / IGNORE_FILE)
+        if ignore_rules:
+            result.findings = apply_ignore(result.findings, ignore_rules)
         result.findings.sort(key=_sort_key)
         result.elapsed_seconds = round(time.perf_counter() - start, 3)
         return result
