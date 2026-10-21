@@ -6,26 +6,64 @@
   读取错误会记入 ``ScanResult.errors`` 并呈现在报告中，
   有错误时报告绝不给出"安全"结论；
 - 不再解析 ``path:line:content`` 文本，天然支持含冒号的路径。
+
+核心抽象 :class:`LineEngine` 负责单行匹配（占位符过滤、熵值门槛、
+重叠抑制——同一处密钥只按最具体的规则报告一次），
+工作区扫描与 Git 历史扫描共用该引擎。
 """
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from .config import (
     CONTEXT_MAX_CHARS,
     DEFAULT_LIMITS,
     EXCLUDED_DIRS,
     EXCLUDED_SUFFIXES,
+    HIGH_VALUE_FILE_PATTERNS,
+    IGNORE_FILE,
     ScanLimits,
 )
-from .detectors import DETECTORS, Detector
+from .detectors import DETECTORS, Detector, mask_value
+from .rules import apply_ignore, load_ignore_rules
 
 #: 读取多少字节用于嗅探二进制文件
 _BINARY_SNIFF_BYTES = 8192
+
+#: 进度回调：(已处理文件数, 当前文件相对路径)
+ProgressCB = Callable[[int, str], None]
+
+
+def is_high_value(filename: str) -> bool:
+    """判断是否属于高价值文件（.env / 凭证 / 私钥等，小写匹配）。"""
+    lowered = filename.lower()
+    return any(fnmatch.fnmatchcase(lowered, pat) for pat in HIGH_VALUE_FILE_PATTERNS)
+
+
+def _decode_text(raw: bytes) -> str | None:
+    """把文件字节解码为文本；判定为二进制时返回 None。
+
+    支持 UTF-8 与 UTF-16（BOM 或无 BOM 启发式：ASCII 段的 UTF-16
+    编码每隔一个字节出现 NUL）。
+    """
+    head = raw[:_BINARY_SNIFF_BYTES]
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16", errors="replace")
+    if b"\x00" not in head:
+        return raw.decode("utf-8", errors="replace")
+    even, odd = head[0::2], head[1::2]
+    even_ratio = even.count(0) / max(len(even), 1)
+    odd_ratio = odd.count(0) / max(len(odd), 1)
+    if even_ratio > 0.8 or odd_ratio > 0.8:
+        return raw.decode("utf-16-le", errors="replace")
+    return None  # 含孤立 NUL，按二进制跳过
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +75,12 @@ class Finding:
     line: int
     masked_key: str
     context: str
+    confidence: str = "high"
+    high_value: bool = False
+    commit: str = ""
+    verification: str = ""
+    #: 原始密钥（仅 opt-in 验证模式下短暂持有；不序列化、不渲染）
+    raw: str = field(default="", repr=False, compare=False)
 
 
 @dataclass(slots=True)
@@ -56,6 +100,62 @@ class ScanResult:
         return not self.errors
 
 
+@dataclass(frozen=True, slots=True)
+class LineHit:
+    """一行内的一个命中（已过滤占位符/熵值门槛，未与其他命中重叠）。"""
+
+    detector: Detector
+    value: str
+    masked: str
+    start: int
+    end: int
+
+
+class LineEngine:
+    """单行匹配引擎：过滤 + 重叠抑制（按检测器顺序先到先得）。"""
+
+    def __init__(self, detectors: tuple[Detector, ...] = DETECTORS) -> None:
+        self.detectors = detectors
+
+    def scan_line(self, line: str) -> list[LineHit]:
+        hits: list[LineHit] = []
+        covered: list[tuple[int, int]] = []
+        for det in self.detectors:
+            for match in det.pattern.finditer(line):
+                value = det.value(match)
+                if not value or det.is_placeholder(value):
+                    continue
+                if det.min_entropy is not None and not det.passes_entropy(value):
+                    continue
+                start, end = match.span(det.value_group)
+                if any(start < c_end and end > c_start for c_start, c_end in covered):
+                    continue  # 已被更具体的规则覆盖
+                covered.append((start, end))
+                hits.append(
+                    LineHit(det, value, mask_value(value), start, end)
+                )
+        return hits
+
+
+def build_context(line: str, hits: list[LineHit]) -> str:
+    """把一行内全部命中的密钥值替换为打码形式，截断到展示上限。"""
+    context = line
+    for hit in sorted(hits, key=lambda h: h.start, reverse=True):
+        context = context[: hit.start] + hit.masked + context[hit.end :]
+    return context.strip()[:CONTEXT_MAX_CHARS]
+
+
+@dataclass(slots=True)
+class _FileOutcome:
+    """单文件扫描产出（供主流程汇总）。"""
+
+    rel: str
+    scanned: int = 0
+    skipped: int = 0
+    findings: list[Finding] = field(default_factory=list)
+    error: str | None = None
+
+
 class Scanner:
     """对给定目录执行密钥扫描。"""
 
@@ -63,59 +163,115 @@ class Scanner:
         self,
         detectors: tuple[Detector, ...] = DETECTORS,
         limits: ScanLimits = DEFAULT_LIMITS,
+        keep_raw: bool = False,
+        progress_cb: ProgressCB | None = None,
     ) -> None:
         self.detectors = detectors
         self.limits = limits
+        self.keep_raw = keep_raw
+        self.progress_cb = progress_cb
+        self._engine = LineEngine(detectors)
 
     def scan_path(self, root: Path, target_label: str | None = None) -> ScanResult:
         """扫描 ``root`` 目录，返回脱敏后的结果。"""
         root = Path(root)
         result = ScanResult(target=target_label or str(root))
         start = time.perf_counter()
+        files: list[tuple[Path, str]] = []
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDED_DIRS)
             for name in sorted(filenames):
-                self._scan_file(Path(dirpath) / name, root, result)
+                path = Path(dirpath) / name
+                files.append((path, path.relative_to(root).as_posix()))
+
+        # 小仓库串行；大仓库线程池并行（结果事后排序，输出保持确定性）
+        if self.limits.scan_workers > 1 and len(files) >= 64:
+            with ThreadPoolExecutor(
+                max_workers=self.limits.scan_workers
+            ) as executor:
+                outcomes = list(
+                    executor.map(
+                        lambda item: self._scan_file(item[0], item[1]), files
+                    )
+                )
+        else:
+            outcomes = [self._scan_file(path, rel) for path, rel in files]
+
+        for index, outcome in enumerate(outcomes):
+            if outcome.error is not None:
+                result.errors.append(outcome.error)
+            else:
+                result.scanned_files += outcome.scanned
+                result.skipped_files += outcome.skipped
+                result.findings.extend(outcome.findings)
+            if self.progress_cb is not None and index % 25 == 0:
+                try:
+                    self.progress_cb(
+                        index, files[index][1] if index < len(files) else ""
+                    )
+                except Exception:
+                    pass  # 进度回调失败不影响扫描
+
+        ignore_rules = load_ignore_rules(root / IGNORE_FILE)
+        if ignore_rules:
+            result.findings = apply_ignore(result.findings, ignore_rules)
+        result.findings.sort(key=_sort_key)
         result.elapsed_seconds = round(time.perf_counter() - start, 3)
         return result
 
     # ---- 内部实现 ----
 
-    def _scan_file(self, path: Path, root: Path, result: ScanResult) -> None:
-        rel = path.relative_to(root).as_posix()
-
+    def _scan_file(self, path: Path, rel: str) -> _FileOutcome:
         if path.name.endswith(".min.js") or path.suffix.lower() in EXCLUDED_SUFFIXES:
-            result.skipped_files += 1
-            return
+            return _FileOutcome(rel, skipped=1)
         try:
             if path.stat().st_size > self.limits.max_file_bytes:
-                result.skipped_files += 1
-                return
-            with path.open("rb") as fh:
-                if b"\x00" in fh.read(_BINARY_SNIFF_BYTES):
-                    result.skipped_files += 1
-                    return
-            text = path.read_text(encoding="utf-8", errors="replace")
+                return _FileOutcome(rel, skipped=1)
+            raw = path.read_bytes()
         except OSError as exc:
-            result.errors.append(f"{rel}: 读取失败 ({exc})")
-            return
+            return _FileOutcome(rel, error=f"{rel}: 读取失败 ({exc})")
 
-        result.scanned_files += 1
+        text = _decode_text(raw)
+        if text is None:
+            return _FileOutcome(rel, skipped=1)
+
+        findings: list[Finding] = []
         seen: set[tuple[str, int, str]] = set()
+        high_value = is_high_value(path.name)
         for lineno, line in enumerate(text.splitlines(), start=1):
             if len(line) > self.limits.max_line_chars:
                 continue
-            for detector in self.detectors:
-                for match in detector.pattern.finditer(line):
-                    value = detector.value(match)
-                    if not value or detector.is_placeholder(value):
-                        continue
-                    masked_key = detector.masked_value(match)
-                    key = (detector.name, lineno, masked_key)
-                    if key in seen:  # 同一行同一密钥去重
-                        continue
-                    seen.add(key)
-                    context = detector.mask_line(line).strip()[:CONTEXT_MAX_CHARS]
-                    result.findings.append(
-                        Finding(detector.name, rel, lineno, masked_key, context)
+            hits = self._engine.scan_line(line)
+            if not hits:
+                continue
+            context = build_context(line, hits)
+            for hit in hits:
+                key = (hit.detector.name, lineno, hit.masked)
+                if key in seen:  # 同一行同一密钥去重
+                    continue
+                seen.add(key)
+                findings.append(
+                    Finding(
+                        detector=hit.detector.name,
+                        file=rel,
+                        line=lineno,
+                        masked_key=hit.masked,
+                        context=context,
+                        confidence=hit.detector.confidence,
+                        high_value=high_value,
+                        raw=hit.value if self.keep_raw else "",
                     )
+                )
+        return _FileOutcome(rel, scanned=1, findings=findings)
+
+
+def _sort_key(finding: Finding) -> tuple:
+    """结果排序：高价值文件置顶，其余按文件 → 行号 → 检测器 → 密钥。"""
+    return (
+        not finding.high_value,
+        finding.file,
+        finding.line,
+        finding.detector,
+        finding.masked_key,
+        finding.commit,
+    )

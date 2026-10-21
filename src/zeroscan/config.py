@@ -53,6 +53,24 @@ PLACEHOLDER_EXACT: frozenset[str] = frozenset({
 #: 报告中展示的上下文最大长度（已脱敏）
 CONTEXT_MAX_CHARS: int = 120
 
+#: 高价值文件名模式（fnmatch，小写匹配）：泄露重灾区，报告标记并置顶
+HIGH_VALUE_FILE_PATTERNS: tuple[str, ...] = (
+    ".env",
+    ".env.*",
+    "*.env",
+    "*credential*",
+    "*secret*",
+    "id_rsa*",
+    "*.pem",
+    "*.key",
+)
+
+#: 自定义规则文件名（CLI --config；未指定时自动加载当前目录的同名文件）
+RULES_FILE: str = "zeroscan.toml"
+
+#: 误报白名单文件名（放在被扫描仓库根目录，扫描时自动生效）
+IGNORE_FILE: str = ".zeroscanignore"
+
 
 @dataclass(frozen=True, slots=True)
 class ScanLimits:
@@ -66,6 +84,8 @@ class ScanLimits:
     max_line_chars: int = 2_000
     #: git clone 超时（秒）
     clone_timeout: int = 60
+    #: 文件级并行扫描线程数（大仓库提速；1 = 串行）
+    scan_workers: int = 4
 
 
 DEFAULT_LIMITS = ScanLimits()

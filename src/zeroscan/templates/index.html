@@ -2,7 +2,7 @@
 {% from "_icons.html" import icon %}
 {% block title %}0scan - 代码安检{% endblock %}
 {% block style %}
-    .zs-hero { max-width: 440px; margin: 0 auto; }
+    .zs-hero { max-width: 460px; margin: 0 auto; }
     .zs-hero-card { padding: 32px 24px; }
     .zs-hero-badge {
         display: flex; align-items: center; justify-content: center;
@@ -18,10 +18,34 @@
         text-align: center; color: var(--zs-text-secondary);
         margin-bottom: 24px; font-size: 13px;
     }
-    .zs-hero-card .zs-btn-block { margin-top: 16px; }
+    .zs-check {
+        display: flex; align-items: flex-start; gap: 8px;
+        margin: 12px 0 16px; font-size: 13px; color: var(--zs-text-secondary);
+        cursor: pointer;
+    }
+    .zs-check input { margin-top: 3px; accent-color: var(--zs-primary); }
+    .zs-hero-card .zs-btn-block + .zs-btn-block { margin-top: 10px; }
+    .zs-btn-demo { border-style: dashed; color: var(--zs-text-secondary); }
     .zs-hero-hint {
         margin-top: 16px; text-align: center;
         font-size: 12px; color: var(--zs-text-tertiary);
+    }
+    .zs-progress {
+        display: flex; align-items: center; gap: 10px;
+        margin-top: 16px; padding: 12px 16px;
+        background: var(--zs-primary-bg); border-radius: var(--zs-radius);
+        font-size: 13px; color: var(--zs-primary);
+    }
+    .zs-spin-dark {
+        width: 14px; height: 14px; flex: none;
+        border: 2px solid rgba(22,119,255,.25); border-top-color: var(--zs-primary);
+        border-radius: 50%; animation: zs-spin .8s linear infinite;
+    }
+    .zs-inline-error {
+        margin-top: 12px; padding: 10px 16px;
+        background: var(--zs-error-bg); border: 1px solid var(--zs-error-border);
+        border-radius: var(--zs-radius);
+        font-size: 13px; color: var(--zs-error-deep); word-break: break-all;
     }
     .zs-features {
         display: grid; grid-template-columns: 1fr; gap: 12px;
@@ -36,6 +60,21 @@
     .zs-feature-icon { display: flex; margin-top: 3px; font-size: 16px; color: var(--zs-primary); }
     .zs-feature b { display: block; font-size: 13px; font-weight: 500; }
     .zs-feature span { display: block; font-size: 12px; color: var(--zs-text-secondary); }
+    .zs-history { max-width: 760px; margin: 32px auto 0; }
+    .zs-history h2 {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 14px; font-weight: 600; margin-bottom: 12px;
+    }
+    .zs-history ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    .zs-history li {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        padding: 10px 16px; font-size: 13px;
+        background: var(--zs-bg-container);
+        border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
+    }
+    .zs-history-target { flex: 1 1 auto; min-width: 0; word-break: break-all; }
+    .zs-history-time { color: var(--zs-text-tertiary); font-size: 12px; }
+    .zs-tag-ok { background: var(--zs-success-bg); color: #389e0d; }
     @media (min-width: 768px) {
         .zs-features { grid-template-columns: repeat(3, 1fr); }
         .zs-hero-card { padding: 40px 32px; }
@@ -49,45 +88,153 @@
             <h1 class="zs-hero-title">0scan 代码安检</h1>
             <p class="zs-hero-desc">
                 输入 GitHub 仓库地址，扫描硬编码密钥与密码；<br>
-                或输入 <code>demo</code> 离线体验（不联网）。
+                或点击下方按钮离线体验（不联网）。
             </p>
-            <form action="/scan" method="post" onsubmit="showLoading()">
+            <form id="scanForm" action="/scan" method="post">
                 <label class="zs-label" for="url">仓库地址</label>
                 <div class="zs-input-affix">
                     <span class="zs-input-prefix">{{ icon('search') }}</span>
                     <input id="url" type="text" name="url" placeholder="https://github.com/owner/repo" required autocomplete="off">
                 </div>
+                <label class="zs-check">
+                    <input type="checkbox" id="fullHistory" name="full_history" value="1">
+                    <span>包含 Git 提交历史（较慢，可检出已删除的密钥）</span>
+                </label>
                 <button type="submit" id="scanBtn" class="zs-btn zs-btn-primary zs-btn-block">
                     <span class="zs-btn-spin" aria-hidden="true"></span>
                     <span id="scanBtnText">开始扫描</span>
                 </button>
+                <button type="button" id="demoBtn" class="zs-btn zs-btn-block zs-btn-demo">
+                    {{ icon('check-circle') }}<span>离线演示（demo）</span>
+                </button>
             </form>
-            <p class="zs-hero-hint">克隆较大仓库可能较慢，请耐心等待 · 仅支持 GitHub https 地址</p>
+            <div id="scanProgress" class="zs-progress" hidden>
+                <span class="zs-spin-dark" aria-hidden="true"></span>
+                <span id="progressText">排队中...</span>
+            </div>
+            <div id="scanError" class="zs-inline-error" hidden></div>
+            <p class="zs-hero-hint">克隆较大仓库可能较慢 · 仅支持 GitHub https 地址 · 所有输出已脱敏</p>
         </div>
         <ul class="zs-features">
             <li class="zs-feature">
                 <span class="zs-feature-icon">{{ icon('key') }}</span>
-                <div><b>五类凭证检测</b><span>OpenAI · AWS · GitHub · Google · 硬编码密码</span></div>
+                <div><b>20+ 类凭证检测</b><span>厂商格式 + 熵值兜底 + 自定义规则</span></div>
             </li>
             <li class="zs-feature">
                 <span class="zs-feature-icon">{{ icon('shield') }}</span>
                 <div><b>全量脱敏输出</b><span>密钥与上下文一律打码后呈现</span></div>
             </li>
             <li class="zs-feature">
-                <span class="zs-feature-icon">{{ icon('check-circle') }}</span>
-                <div><b>离线 demo 模式</b><span>输入 demo 无需联网即可体验</span></div>
+                <span class="zs-feature-icon">{{ icon('clock') }}</span>
+                <div><b>历史与报告下载</b><span>扫描历史可回看，报告可下载 HTML/JSON</span></div>
             </li>
         </ul>
     </div>
+    {% if jobs %}
+    <div class="zs-history">
+        <h2>{{ icon('clock') }}最近扫描</h2>
+        <ul>
+            {% for job in jobs %}
+            <li>
+                <span class="zs-history-target"><code>{{ job.target }}</code></span>
+                {% if job.state == "done" %}
+                    {% if job.findings %}
+                        <span class="zs-tag zs-tag-error">{{ job.findings }} 处风险</span>
+                    {% else %}
+                        <span class="zs-tag zs-tag-ok">未发现风险</span>
+                    {% endif %}
+                    <a href="/report/{{ job.id }}">查看报告</a>
+                {% elif job.state == "error" %}
+                    <span class="zs-tag zs-tag-medium">失败</span>
+                {% else %}
+                    <span class="zs-tag">进行中</span>
+                {% endif %}
+                <span class="zs-history-time">{{ job.time }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 {% block script %}
 <script>
-    function showLoading() {
-        var btn = document.getElementById('scanBtn');
-        btn.disabled = true;
-        btn.classList.add('zs-btn-loading');
-        document.getElementById('scanBtnText').textContent = '扫描中...';
-    }
+    (function () {
+        var form = document.getElementById('scanForm');
+        var urlInput = document.getElementById('url');
+        var fullInput = document.getElementById('fullHistory');
+        var scanBtn = document.getElementById('scanBtn');
+        var btnText = document.getElementById('scanBtnText');
+        var progress = document.getElementById('scanProgress');
+        var progressText = document.getElementById('progressText');
+        var errorBox = document.getElementById('scanError');
+
+        function setBusy(busy) {
+            scanBtn.disabled = busy;
+            scanBtn.classList.toggle('zs-btn-loading', busy);
+            btnText.textContent = busy ? '扫描中...' : '开始扫描';
+            progress.hidden = !busy;
+            if (busy) { setProgress('排队中...'); errorBox.hidden = true; }
+        }
+
+        function setProgress(text) { progressText.textContent = text; }
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.hidden = false;
+        }
+
+        function startScan() {
+            setBusy(true);
+            fetch('/api/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: urlInput.value.trim(),
+                    full_history: fullInput.checked ? 1 : 0
+                })
+            })
+                .then(function (resp) {
+                    return resp.json().then(function (data) {
+                        if (!resp.ok) { throw new Error(data.error || '请求失败'); }
+                        return data;
+                    });
+                })
+                .then(function (data) { poll(data.job_id); })
+                .catch(function (err) { setBusy(false); showError(err.message); });
+        }
+
+        function poll(jobId) {
+            fetch('/api/status/' + jobId)
+                .then(function (resp) { return resp.json(); })
+                .then(function (status) {
+                    if (status.state === 'done') {
+                        location.href = '/report/' + jobId;
+                        return;
+                    }
+                    if (status.state === 'error') {
+                        setBusy(false);
+                        showError(status.error || '扫描失败');
+                        return;
+                    }
+                    var text = status.stage;
+                    if (status.stage === '扫描文件' && status.scanned_files) {
+                        text += '：已检查 ' + status.scanned_files + ' 个文件';
+                    }
+                    setProgress(text);
+                    setTimeout(function () { poll(jobId); }, 800);
+                })
+                .catch(function () { setBusy(false); showError('网络中断，请重试'); });
+        }
+
+        form.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            startScan();
+        });
+        document.getElementById('demoBtn').addEventListener('click', function () {
+            urlInput.value = 'demo';
+            startScan();
+        });
+    })();
 </script>
 {% endblock %}

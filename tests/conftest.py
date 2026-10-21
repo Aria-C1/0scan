@@ -19,6 +19,9 @@ FAKE_GITHUB = "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789"
 FAKE_GOOGLE = "AIza" + "A" * 35
 FAKE_PASSWORD = "hunter2hunter2hunter2"
 
+#: 高熵随机串（32 位 base64 字符集，熵值检测的样本）
+FAKE_ENTROPY = "X7kQm2vN9pLr4tYw6Zb8CfHj3DsGa1Eu"
+
 ALL_FAKE_SECRETS = (FAKE_OPENAI, FAKE_AWS, FAKE_GITHUB, FAKE_GOOGLE, FAKE_PASSWORD)
 
 #: 旧版界面使用过的 emoji，重设计后页面中不得再出现

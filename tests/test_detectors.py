@@ -5,9 +5,11 @@ from __future__ import annotations
 import pytest
 
 from zeroscan.detectors import DETECTORS, Detector, mask_value
+from zeroscan.scanner import LineEngine
 
 from conftest import (
     FAKE_AWS,
+    FAKE_ENTROPY,
     FAKE_GITHUB,
     FAKE_GOOGLE,
     FAKE_OPENAI,
@@ -84,6 +86,91 @@ def test_structured_keys_survive_weak_markers() -> None:
     pw = _BY_NAME["Hardcoded Password"]
     assert pw.is_placeholder("abc123456def")
     assert not pw.is_placeholder("correct-horse-battery")
+
+
+# ---- 扩展检测器库（v1.1）----
+
+_EXPANDED_SAMPLES = [
+    ("Private Key (PEM/PGP)", "-----BEGIN OPENSSH PRIVATE KEY-----"),
+    ("Private Key (PEM/PGP)", "-----BEGIN PGP PRIVATE KEY BLOCK-----"),
+    ("Anthropic Key", "sk-ant-api03-A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6"),
+    ("OpenAI Key", "sk-proj-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"),
+    ("AWS Access Key", "ASIAIOSFODNN7EXAMPLE"),
+    ("GitLab Token", "glpat-" + "abcdef1234567890abcd"),
+    ("Slack Token", "xoxb-1234567890-abcdefghijklm"),
+    ("Stripe Secret Key", "sk_live_" + "abcdefghijklmnopqrstuvwxyz"),
+    ("SendGrid API Key", "SG." + "a1B2c3D4e5F6g7H8i9J0k1" + "." + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0u1V"),
+    ("Twilio API Key", "SK" + "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"),
+    ("Mailgun API Key", "key-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6"),
+    ("npm Token", "npm_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"),
+    ("PyPI Token", "pypi-AgEIcHlwaS5vcmc" + "A1b2C3d4E5f6G7h8I9j0K1"),
+    ("Shopify Token", "shpat_" + "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"),
+    ("Telegram Bot Token", "1234567890:AA" + "Hfi-BaksjG1s4gmPDX1jKh3xQ7wZ2n5Ve"),
+    ("Facebook Access Token", "EAACEdEose0cBA" + "A1b2c3D4e5"),
+    (
+        "JWT",
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0."
+        "dozjgNryP4J3jVmNHl0w5N0XgL0n3I9PlFUP0THsR8U",
+    ),
+    ("Database URL Password", 'db = "postgres://admin:S3cretPw@db.example.com/prod"'),
+    ("Generic API Key", 'api_key = "abcdefghijklmnopqrstuvwxyz"'),
+]
+
+
+@pytest.mark.parametrize(("name", "line"), _EXPANDED_SAMPLES)
+def test_expanded_detector_samples(name: str, line: str) -> None:
+    det = _BY_NAME[name]
+    match = det.pattern.search(line)
+    assert match is not None, f"{name} 未命中样本"
+    value = det.value(match)
+    assert value and not det.is_placeholder(value)
+
+
+def test_confidence_levels() -> None:
+    assert _BY_NAME["OpenAI Key"].confidence == "high"
+    assert _BY_NAME["Hardcoded Password"].confidence == "medium"
+    assert _BY_NAME["Generic API Key"].confidence == "medium"
+
+
+def test_overlap_suppression_keeps_most_specific() -> None:
+    """Anthropic 密钥同时符合 OpenAI 宽松格式，只应报告一次。"""
+    line = 'key = "sk-ant-api03-A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6"'
+    hits = LineEngine().scan_line(line)
+    assert [h.detector.name for h in hits] == ["Anthropic Key"]
+
+
+def test_line_engine_suppresses_entropy_when_vendor_matched() -> None:
+    line = f'k = "{FAKE_OPENAI}"'
+    names = [h.detector.name for h in LineEngine().scan_line(line)]
+    assert names == ["OpenAI Key"]
+
+
+# ---- 熵值检测 ----
+
+def test_entropy_catches_high_entropy_random_string() -> None:
+    """未知格式的高随机度字符串应被熵值兜底规则捕获。"""
+    line = f'upload_token = "{FAKE_ENTROPY}"'
+    hits = LineEngine().scan_line(line)
+    assert [h.detector.name for h in hits] == ["High-Entropy String"]
+    assert hits[0].detector.confidence == "medium"
+    assert hits[0].masked == "X7kQ****a1Eu"
+
+
+def test_entropy_ignores_plain_identifiers() -> None:
+    """普通长标识符（无数字或熵值不足）不应命中。"""
+    for line in (
+        "this_is_a_very_long_identifier_name_here",
+        "const counter_value_1 = 1",
+    ):
+        assert LineEngine().scan_line(line) == []
+
+
+def test_entropy_requires_digit_and_letter_mix() -> None:
+    """纯字母（即使高熵）或纯数字都不命中，降低误报。"""
+    letters_only = '"' + "qwertyuiopasdfghjklzxcvb" + '"'  # 24 个不同字母，熵≈4.58
+    digits_only = '"' + "01234567890123456789012345678901" + '"'
+    assert LineEngine().scan_line(letters_only) == []
+    assert LineEngine().scan_line(digits_only) == []
 
 
 def test_placeholder_substring_does_not_kill_real_key_on_same_line() -> None:

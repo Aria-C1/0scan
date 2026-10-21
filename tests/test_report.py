@@ -23,6 +23,7 @@ def _result_with_xss_filename() -> ScanResult:
                 line=3,
                 masked_key="hunt****ter2",
                 context='password = "hunt****ter2";',
+                confidence="medium",
             )
         ],
     )
@@ -73,6 +74,41 @@ def test_json_output_roundtrip() -> None:
     assert data["findings"][0]["file"] == _XSS_FILENAME
     assert data["findings"][0]["masked_key"] == "hunt****ter2"
     assert FAKE_PASSWORD not in render_json(_result_with_xss_filename())
+
+
+def test_sarif_output_structure() -> None:
+    """SARIF：结构完整、置信度映射 level、内容脱敏。"""
+    from zeroscan.report import render_sarif
+
+    doc = json.loads(render_sarif(_result_with_xss_filename()))
+    assert doc["version"] == "2.1.0"
+    run = doc["runs"][0]
+    assert run["tool"]["driver"]["name"] == "zeroscan"
+    assert {"id": "Hardcoded Password"} in run["tool"]["driver"]["rules"]
+    entry = run["results"][0]
+    assert entry["ruleId"] == "Hardcoded Password"
+    assert entry["level"] == "warning"  # medium 置信度
+    assert entry["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == (
+        _XSS_FILENAME
+    )
+    assert FAKE_PASSWORD not in json.dumps(doc)
+
+
+def test_sarif_high_confidence_maps_to_error() -> None:
+    from zeroscan.report import render_sarif
+    from zeroscan.scanner import Finding, ScanResult
+
+    result = ScanResult(
+        target="x",
+        findings=[
+            Finding(
+                detector="OpenAI Key", file="a.py", line=1,
+                masked_key="sk-1****wxyz", context='k = "sk-1****wxyz"',
+                confidence="high",
+            )
+        ],
+    )
+    assert json.loads(render_sarif(result))["runs"][0]["results"][0]["level"] == "error"
 
 
 def test_report_uses_svg_icons_and_font_stack_without_emoji() -> None:
