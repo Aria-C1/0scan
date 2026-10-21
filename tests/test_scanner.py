@@ -84,3 +84,16 @@ def test_result_is_deterministic(repo: Path) -> None:
     first = Scanner().scan_path(repo)
     second = Scanner().scan_path(repo)
     assert first.findings == second.findings
+
+
+def test_entropy_finding_in_full_scan(tmp_path: Path) -> None:
+    """端到端：无已知格式的高熵串以 medium 置信度入报告。"""
+    from conftest import FAKE_ENTROPY
+
+    (tmp_path / "notes.txt").write_text(
+        f'session = "{FAKE_ENTROPY}"\n', encoding="utf-8"
+    )
+    result = Scanner().scan_path(tmp_path)
+    assert [(f.detector, f.confidence) for f in result.findings] == [
+        ("High-Entropy String", "medium")
+    ]

@@ -5,9 +5,11 @@ from __future__ import annotations
 import pytest
 
 from zeroscan.detectors import DETECTORS, Detector, mask_value
+from zeroscan.scanner import LineEngine
 
 from conftest import (
     FAKE_AWS,
+    FAKE_ENTROPY,
     FAKE_GITHUB,
     FAKE_GOOGLE,
     FAKE_OPENAI,
@@ -132,19 +134,43 @@ def test_confidence_levels() -> None:
 
 def test_overlap_suppression_keeps_most_specific() -> None:
     """Anthropic 密钥同时符合 OpenAI 宽松格式，只应报告一次。"""
-    from zeroscan.scanner import LineEngine
-
     line = 'key = "sk-ant-api03-A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6"'
     hits = LineEngine().scan_line(line)
     assert [h.detector.name for h in hits] == ["Anthropic Key"]
 
 
 def test_line_engine_suppresses_entropy_when_vendor_matched() -> None:
-    from zeroscan.scanner import LineEngine
-
     line = f'k = "{FAKE_OPENAI}"'
     names = [h.detector.name for h in LineEngine().scan_line(line)]
     assert names == ["OpenAI Key"]
+
+
+# ---- 熵值检测 ----
+
+def test_entropy_catches_high_entropy_random_string() -> None:
+    """未知格式的高随机度字符串应被熵值兜底规则捕获。"""
+    line = f'upload_token = "{FAKE_ENTROPY}"'
+    hits = LineEngine().scan_line(line)
+    assert [h.detector.name for h in hits] == ["High-Entropy String"]
+    assert hits[0].detector.confidence == "medium"
+    assert hits[0].masked == "X7kQ****a1Eu"
+
+
+def test_entropy_ignores_plain_identifiers() -> None:
+    """普通长标识符（无数字或熵值不足）不应命中。"""
+    for line in (
+        "this_is_a_very_long_identifier_name_here",
+        "const counter_value_1 = 1",
+    ):
+        assert LineEngine().scan_line(line) == []
+
+
+def test_entropy_requires_digit_and_letter_mix() -> None:
+    """纯字母（即使高熵）或纯数字都不命中，降低误报。"""
+    letters_only = '"' + "qwertyuiopasdfghjklzxcvb" + '"'  # 24 个不同字母，熵≈4.58
+    digits_only = '"' + "01234567890123456789012345678901" + '"'
+    assert LineEngine().scan_line(letters_only) == []
+    assert LineEngine().scan_line(digits_only) == []
 
 
 def test_placeholder_substring_does_not_kill_real_key_on_same_line() -> None:
