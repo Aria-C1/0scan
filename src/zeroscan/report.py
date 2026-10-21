@@ -36,8 +36,13 @@ def render_html(result: ScanResult, *, web_mode: bool = False) -> str:
 
 
 def render_json(result: ScanResult) -> str:
-    """把扫描结果序列化为 JSON（发现均已脱敏）。"""
-    return json.dumps(asdict(result), ensure_ascii=False, indent=2)
+    """把扫描结果序列化为 JSON（发现均已脱敏，原始密钥不输出）。"""
+    payload = asdict(result)
+    payload["findings"] = [
+        {k: v for k, v in finding.items() if k != "raw"}
+        for finding in payload["findings"]
+    ]
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def render_sarif(result: ScanResult) -> str:

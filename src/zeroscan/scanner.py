@@ -74,6 +74,9 @@ class Finding:
     confidence: str = "high"
     high_value: bool = False
     commit: str = ""
+    verification: str = ""
+    #: 原始密钥（仅 opt-in 验证模式下短暂持有；不序列化、不渲染）
+    raw: str = field(default="", repr=False, compare=False)
 
 
 @dataclass(slots=True)
@@ -156,9 +159,11 @@ class Scanner:
         self,
         detectors: tuple[Detector, ...] = DETECTORS,
         limits: ScanLimits = DEFAULT_LIMITS,
+        keep_raw: bool = False,
     ) -> None:
         self.detectors = detectors
         self.limits = limits
+        self.keep_raw = keep_raw
         self._engine = LineEngine(detectors)
 
     def scan_path(self, root: Path, target_label: str | None = None) -> ScanResult:
@@ -241,6 +246,7 @@ class Scanner:
                         context=context,
                         confidence=hit.detector.confidence,
                         high_value=high_value,
+                        raw=hit.value if self.keep_raw else "",
                     )
                 )
         return _FileOutcome(rel, scanned=1, findings=findings)

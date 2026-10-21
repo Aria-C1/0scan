@@ -19,6 +19,7 @@ from .repo import RepoError, fetch_repo
 from .report import render_json, write_html, write_sarif
 from .rules import RuleError, load_custom_detectors
 from .scanner import Scanner
+from .verify import verify_findings
 from .config import RULES_FILE
 
 
@@ -37,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan_p.add_argument("--sarif", metavar="PATH", help="同时生成 SARIF 报告（GitHub Code Scanning）")
     scan_p.add_argument("--config", metavar="PATH", help="自定义规则文件 zeroscan.toml（默认自动加载当前目录）")
     scan_p.add_argument("--full-history", action="store_true", help="完整克隆并扫描全部提交历史（较慢）")
+    scan_p.add_argument("--verify", action="store_true", help="在线验证密钥有效性（仅 GitHub/OpenAI 只读端点，opt-in）")
     scan_p.add_argument("--timeout", type=int, default=60, help="克隆超时秒数（默认 60）")
     scan_p.set_defaults(func=cmd_scan)
 
@@ -52,7 +54,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
     detectors = _resolve_detectors(args.config)
     if detectors is None:
         return 2
-    scanner = Scanner(detectors=detectors)
+    scanner = Scanner(detectors=detectors, keep_raw=args.verify)
     try:
         with fetch_repo(args.target, full_history=args.full_history) as repo_dir:
             result = scanner.scan_path(repo_dir, target_label=args.target.strip())
@@ -65,6 +67,9 @@ def cmd_scan(args: argparse.Namespace) -> int:
     except RepoError as exc:
         print(f"❌ {exc}", file=sys.stderr)
         return 2
+
+    if args.verify:
+        result.findings = verify_findings(result.findings)
 
     if args.json:
         print(render_json(result))
@@ -95,6 +100,13 @@ def _resolve_detectors(config_arg: str | None) -> tuple[Detector, ...] | None:
     return detectors
 
 
+_VERIFICATION_LABELS = {
+    "valid": "（在线验证：密钥有效，请立即吊销！）",
+    "invalid": "（在线验证：已失效）",
+    "unknown": "（在线验证失败）",
+}
+
+
 def _print_summary(result) -> None:
     print(f"🎯 扫描完成：{result.scanned_files} 个文件，耗时 {result.elapsed_seconds}s")
     for err in result.errors:
@@ -110,8 +122,9 @@ def _print_summary(result) -> None:
         where = f"{item.file}:{item.line}"
         if item.commit:
             where += f" @ {item.commit}"
+        badge = _VERIFICATION_LABELS.get(item.verification, "")
         print(f"  [{item.detector}] {where}")
-        print(f"    凭证: {item.masked_key}")
+        print(f"    凭证: {item.masked_key}{badge}")
         print(f"    {item.context}")
 
 
