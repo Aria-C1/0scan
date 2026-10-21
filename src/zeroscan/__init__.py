@@ -14,9 +14,12 @@ from __future__ import annotations
 __version__ = "1.0.0"
 
 from .detectors import DETECTORS, Detector, mask_value
+from .history import scan_history
 from .repo import RepoError, TargetKind, classify_target, fetch_repo
-from .report import render_html, render_json, write_html
+from .report import render_html, render_json, render_sarif, write_html, write_sarif
+from .rules import RuleError, load_custom_detectors
 from .scanner import Finding, ScanResult, Scanner
+from .verify import verify_findings, verify_secret
 from .webapp import create_app
 
 __all__ = [
@@ -29,15 +32,25 @@ __all__ = [
     "DETECTORS",
     "Detector",
     "mask_value",
+    # 历史扫描
+    "scan_history",
     # 目标获取
     "RepoError",
     "TargetKind",
     "classify_target",
     "fetch_repo",
+    # 自定义规则
+    "RuleError",
+    "load_custom_detectors",
     # 报告
     "render_html",
     "render_json",
+    "render_sarif",
     "write_html",
+    "write_sarif",
+    # 验证
+    "verify_secret",
+    "verify_findings",
     # Web
     "create_app",
 ]

@@ -6,7 +6,7 @@ import pytest
 
 from zeroscan.report import render_html, render_json
 from zeroscan.scanner import Finding, ScanResult, Scanner
-from zeroscan.verify import verify, verify_findings
+from zeroscan.verify import verify_findings, verify_secret
 
 from conftest import FAKE_GITHUB, FAKE_OPENAI
 
@@ -27,12 +27,12 @@ def mock_status(monkeypatch: pytest.MonkeyPatch):
 )
 def test_verify_status_mapping(mock_status, status, expected) -> None:
     mock_status(status)
-    assert verify(FAKE_GITHUB, "GitHub Token") == expected
+    assert verify_secret(FAKE_GITHUB, "GitHub Token") == expected
 
 
 def test_verify_unsupported_detector_returns_empty(mock_status) -> None:
     mock_status(200)
-    assert verify("whatever", "AWS Access Key") == ""
+    assert verify_secret("whatever", "AWS Access Key") == ""
 
 
 def test_verify_findings_marks_and_clears_raw(mock_status) -> None:

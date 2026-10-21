@@ -3,6 +3,34 @@
 {% block title %}0scan 安检报告{% endblock %}
 {% block style %}
     .zs-back { margin-bottom: 16px; }
+    .zs-toolbar {
+        display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px; padding: 12px 16px;
+        background: var(--zs-bg-container);
+        border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
+    }
+    .zs-filter { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 260px; }
+    .zs-filter input, .zs-filter select {
+        height: 32px; padding: 0 10px;
+        border: 1px solid var(--zs-border-strong); border-radius: var(--zs-radius);
+        font-family: inherit; font-size: 13px; color: var(--zs-text);
+        background: var(--zs-bg-container); outline: none;
+    }
+    .zs-filter input { flex: 1 1 180px; min-width: 0; }
+    .zs-filter input:focus, .zs-filter select:focus {
+        border-color: var(--zs-primary); box-shadow: 0 0 0 2px rgba(5,145,255,.1);
+    }
+    .zs-downloads { display: flex; gap: 8px; }
+    .zs-downloads .zs-btn { height: 32px; padding: 0 12px; font-size: 13px; }
+    .zs-copy-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 26px; height: 26px; padding: 0;
+        border: 1px solid var(--zs-border-strong); border-radius: 4px;
+        background: transparent; color: var(--zs-text-secondary);
+        font-size: 13px; cursor: pointer; transition: all .2s;
+    }
+    .zs-copy-btn:hover { border-color: var(--zs-primary); color: var(--zs-primary); }
     .zs-pagehead { margin-bottom: 16px; }
     .zs-pagehead h1 {
         display: flex; align-items: center; gap: 8px;
@@ -58,6 +86,24 @@
     <a href="/" class="zs-btn zs-back">{{ icon('arrow-left') }}<span>返回重新扫描</span></a>
     {% endif %}
 
+    {% if web_mode and job_id %}
+    <div class="zs-toolbar">
+        <div class="zs-filter">
+            <input id="zsSearch" type="text" placeholder="搜索文件 / 密钥 / 上下文...">
+            <select id="zsType">
+                <option value="">全部类型</option>
+                {% for name in result.findings | map(attribute='detector') | unique | sort %}
+                <option value="{{ name }}">{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="zs-downloads">
+            <a class="zs-btn" href="/api/report/{{ job_id }}?format=html">{{ icon('download') }}<span>HTML</span></a>
+            <a class="zs-btn" href="/api/report/{{ job_id }}?format=json">{{ icon('download') }}<span>JSON</span></a>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="zs-pagehead">
         <h1><span class="zs-pagehead-icon">{{ icon('shield') }}</span>代码安检报告</h1>
         <p class="zs-pagehead-meta">目标：<code>{{ result.target }}</code></p>
@@ -98,7 +144,7 @@
     {% if result.findings %}
     <p class="zs-findings-count">共发现 <strong>{{ result.findings | length }}</strong> 处潜在风险：</p>
     {% for item in result.findings %}
-    <div class="zs-card zs-finding">
+    <div class="zs-card zs-finding" data-type="{{ item.detector }}">
         <div class="zs-finding-head">
             <span class="zs-tag zs-tag-error">{{ item.detector }}</span>
             <span class="zs-finding-pos">
@@ -109,6 +155,9 @@
                 {% if item.confidence == "medium" %}<span class="zs-tag zs-tag-medium">中置信度</span>{% endif %}
                 {% if item.commit %}<code>{{ item.commit }}</code>{% endif %}
                 {{ item.file }} · 第 {{ item.line }} 行
+                {% if web_mode %}
+                <button type="button" class="zs-copy-btn" data-key="{{ item.masked_key }}" title="复制脱敏密钥">{{ icon('copy') }}</button>
+                {% endif %}
             </span>
         </div>
         <div class="zs-meta-row">
@@ -140,4 +189,43 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+{% block script %}
+{% if web_mode %}
+<script>
+    (function () {
+        var search = document.getElementById('zsSearch');
+        var typeSelect = document.getElementById('zsType');
+        if (search && typeSelect) {
+            var applyFilter = function () {
+                var keyword = search.value.trim().toLowerCase();
+                var type = typeSelect.value;
+                document.querySelectorAll('.zs-finding').forEach(function (card) {
+                    var matchType = !type || card.getAttribute('data-type') === type;
+                    var matchText = !keyword ||
+                        card.textContent.toLowerCase().indexOf(keyword) !== -1;
+                    card.style.display = matchType && matchText ? '' : 'none';
+                });
+            };
+            search.addEventListener('input', applyFilter);
+            typeSelect.addEventListener('change', applyFilter);
+        }
+        document.querySelectorAll('.zs-copy-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var key = btn.getAttribute('data-key');
+                var done = function () {
+                    var old = btn.getAttribute('title');
+                    btn.setAttribute('title', '已复制');
+                    setTimeout(function () { btn.setAttribute('title', old); }, 1200);
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(key).then(done, done);
+                } else {
+                    done();
+                }
+            });
+        });
+    })();
+</script>
+{% endif %}
 {% endblock %}

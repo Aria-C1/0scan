@@ -20,6 +20,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from .config import (
     CONTEXT_MAX_CHARS,
@@ -35,6 +36,9 @@ from .rules import apply_ignore, load_ignore_rules
 
 #: 读取多少字节用于嗅探二进制文件
 _BINARY_SNIFF_BYTES = 8192
+
+#: 进度回调：(已处理文件数, 当前文件相对路径)
+ProgressCB = Callable[[int, str], None]
 
 
 def is_high_value(filename: str) -> bool:
@@ -160,10 +164,12 @@ class Scanner:
         detectors: tuple[Detector, ...] = DETECTORS,
         limits: ScanLimits = DEFAULT_LIMITS,
         keep_raw: bool = False,
+        progress_cb: ProgressCB | None = None,
     ) -> None:
         self.detectors = detectors
         self.limits = limits
         self.keep_raw = keep_raw
+        self.progress_cb = progress_cb
         self._engine = LineEngine(detectors)
 
     def scan_path(self, root: Path, target_label: str | None = None) -> ScanResult:
@@ -191,13 +197,20 @@ class Scanner:
         else:
             outcomes = [self._scan_file(path, rel) for path, rel in files]
 
-        for outcome in outcomes:
+        for index, outcome in enumerate(outcomes):
             if outcome.error is not None:
                 result.errors.append(outcome.error)
             else:
                 result.scanned_files += outcome.scanned
                 result.skipped_files += outcome.skipped
                 result.findings.extend(outcome.findings)
+            if self.progress_cb is not None and index % 25 == 0:
+                try:
+                    self.progress_cb(
+                        index, files[index][1] if index < len(files) else ""
+                    )
+                except Exception:
+                    pass  # 进度回调失败不影响扫描
 
         ignore_rules = load_ignore_rules(root / IGNORE_FILE)
         if ignore_rules:

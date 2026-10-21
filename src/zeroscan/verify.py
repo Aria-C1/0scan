@@ -42,7 +42,7 @@ def _request_status(url: str, scheme: str, secret: str) -> int | None:
         return None
 
 
-def verify(raw: str, detector: str) -> str:
+def verify_secret(raw: str, detector: str) -> str:
     """验证密钥：valid / invalid / unknown；不可验证的检测器返回空串。"""
     entry = _VERIFIERS.get(detector)
     if entry is None or not raw:
@@ -60,6 +60,6 @@ def verify_findings(findings: list[Finding]) -> list[Finding]:
     """对支持验证的发现逐条验证，并立即丢弃原始密钥。"""
     verified: list[Finding] = []
     for finding in findings:
-        status = verify(finding.raw, finding.detector)
+        status = verify_secret(finding.raw, finding.detector)
         verified.append(replace(finding, verification=status, raw=""))
     return verified
