@@ -51,6 +51,7 @@ class Finding:
     context: str
     confidence: str = "high"
     high_value: bool = False
+    commit: str = ""
 
 
 @dataclass(slots=True)
@@ -211,4 +212,5 @@ def _sort_key(finding: Finding) -> tuple:
         finding.line,
         finding.detector,
         finding.masked_key,
+        finding.commit,
     )

@@ -74,11 +74,15 @@ def classify_target(raw: str) -> tuple[TargetKind, str]:
     )
 
 
-def clone_shallow(url: str, dest: Path, timeout: int) -> None:
-    """浅克隆 ``url`` 到 ``dest``，失败时抛出带原因的 :class:`RepoError`。"""
+def clone_shallow(url: str, dest: Path, timeout: int, shallow: bool = True) -> None:
+    """克隆 ``url`` 到 ``dest``（默认浅克隆），失败抛出带原因的 :class:`RepoError`。"""
+    args = ["git", "clone"]
+    if shallow:
+        args += ["--depth", "1"]
+    args += ["--single-branch", url, str(dest)]
     try:
         proc = subprocess.run(
-            ["git", "clone", "--depth", "1", "--single-branch", url, str(dest)],
+            args,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -95,9 +99,15 @@ def clone_shallow(url: str, dest: Path, timeout: int) -> None:
 
 @contextmanager
 def fetch_repo(
-    raw_target: str, *, limits: ScanLimits = DEFAULT_LIMITS
+    raw_target: str,
+    *,
+    limits: ScanLimits = DEFAULT_LIMITS,
+    full_history: bool = False,
 ) -> Iterator[Path]:
-    """获取扫描目标，yield 一个可扫描的目录；退出时保证清理。"""
+    """获取扫描目标，yield 一个可扫描的目录；退出时保证清理。
+
+    ``full_history=True`` 时完整克隆（不截断深度），供历史扫描使用。
+    """
     kind, value = classify_target(raw_target)
 
     if kind is TargetKind.LOCAL:
@@ -110,7 +120,9 @@ def fetch_repo(
             repo_dir.mkdir()
             (repo_dir / _DEMO_FILE).write_text(_DEMO_CONTENT, encoding="utf-8")
         else:
-            clone_shallow(value, repo_dir, limits.clone_timeout)
+            clone_shallow(
+                value, repo_dir, limits.clone_timeout, shallow=not full_history
+            )
             used = _dir_size(repo_dir)
             if used > limits.max_repo_bytes:
                 raise RepoError(
