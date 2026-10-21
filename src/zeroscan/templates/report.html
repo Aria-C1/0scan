@@ -38,7 +38,9 @@
         display: flex; flex-wrap: wrap; align-items: center;
         justify-content: space-between; gap: 8px 12px; margin-bottom: 12px;
     }
-    .zs-finding-pos { font-size: 12px; color: var(--zs-text-secondary); word-break: break-all; }
+    .zs-finding-pos { font-size: 12px; color: var(--zs-text-secondary); word-break: break-all; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .zs-tag-high { background: var(--zs-error-bg); color: var(--zs-error-deep); border: 1px solid var(--zs-error-border); }
+    .zs-tag-medium { background: var(--zs-warning-bg); color: #d48806; border: 1px solid var(--zs-warning-border); }
     .zs-meta-row {
         display: flex; align-items: flex-start; gap: 8px;
         margin-bottom: 8px; font-size: 13px;
@@ -98,7 +100,11 @@
     <div class="zs-card zs-finding">
         <div class="zs-finding-head">
             <span class="zs-tag zs-tag-error">{{ item.detector }}</span>
-            <span class="zs-finding-pos">{{ item.file }} · 第 {{ item.line }} 行</span>
+            <span class="zs-finding-pos">
+                {% if item.high_value %}<span class="zs-tag zs-tag-high">高危文件</span>{% endif %}
+                {% if item.confidence == "medium" %}<span class="zs-tag zs-tag-medium">中置信度</span>{% endif %}
+                {{ item.file }} · 第 {{ item.line }} 行
+            </span>
         </div>
         <div class="zs-meta-row">
             <span class="zs-meta-icon">{{ icon('file-text') }}</span>

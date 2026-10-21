@@ -186,10 +186,13 @@ DETECTORS: tuple[Detector, ...] = (
         ),
         value_group=1,
     ),
-    # ---- 通用赋值（medium）----
+    # ---- 通用赋值（medium；兼容 .env 无引号 / yaml 冒号风格）----
     Detector(
         name="Hardcoded Password",
-        pattern=re.compile(r"""(?i)\bpassword\b\s*=\s*['"]([^$'"\s][^'"]*)['"]"""),
+        pattern=re.compile(
+            r"""(?i)\b[\w.\-]*password[\w.\-]*\s*[:=]\s*["']?"""
+            r"""([A-Za-z0-9][^$"'`\s()\[\]{};,+]{3,})["']?"""
+        ),
         value_group=1,
         structured=False,
         confidence="medium",
@@ -197,9 +200,9 @@ DETECTORS: tuple[Detector, ...] = (
     Detector(
         name="Generic API Key",
         pattern=re.compile(
-            r"""(?i)\b(?:api[_-]?key|apikey|access[_-]?token|auth[_-]?token"""
-            r"""|client[_-]?secret|secret[_-]?key|app[_-]?secret)\b\s*[:=]\s*['"]"""
-            r"""([A-Za-z0-9_\-+/=.]{16,})['"]"""
+            r"""(?i)\b[\w.\-]*(?:api[_-]?key|apikey|access[_-]?token|auth[_-]?token"""
+            r"""|client[_-]?secret|secret[_-]?key|app[_-]?secret)[\w.\-]*\s*[:=]\s*["']?"""
+            r"""([A-Za-z0-9][A-Za-z0-9_\-+/=.]{15,})["']?"""
         ),
         value_group=1,
         structured=False,

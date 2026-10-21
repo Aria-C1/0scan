@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import time
 from dataclasses import dataclass, field
@@ -24,12 +25,19 @@ from .config import (
     DEFAULT_LIMITS,
     EXCLUDED_DIRS,
     EXCLUDED_SUFFIXES,
+    HIGH_VALUE_FILE_PATTERNS,
     ScanLimits,
 )
 from .detectors import DETECTORS, Detector, mask_value
 
 #: 读取多少字节用于嗅探二进制文件
 _BINARY_SNIFF_BYTES = 8192
+
+
+def is_high_value(filename: str) -> bool:
+    """判断是否属于高价值文件（.env / 凭证 / 私钥等，小写匹配）。"""
+    lowered = filename.lower()
+    return any(fnmatch.fnmatchcase(lowered, pat) for pat in HIGH_VALUE_FILE_PATTERNS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +50,7 @@ class Finding:
     masked_key: str
     context: str
     confidence: str = "high"
+    high_value: bool = False
 
 
 @dataclass(slots=True)
@@ -167,6 +176,7 @@ class Scanner:
 
         findings: list[Finding] = []
         seen: set[tuple[str, int, str]] = set()
+        high_value = is_high_value(path.name)
         for lineno, line in enumerate(text.splitlines(), start=1):
             if len(line) > self.limits.max_line_chars:
                 continue
@@ -187,11 +197,18 @@ class Scanner:
                         masked_key=hit.masked,
                         context=context,
                         confidence=hit.detector.confidence,
+                        high_value=high_value,
                     )
                 )
         return _FileOutcome(rel, scanned=1, findings=findings)
 
 
 def _sort_key(finding: Finding) -> tuple:
-    """结果排序：文件 → 行号 → 检测器 → 密钥，保证输出确定性。"""
-    return (finding.file, finding.line, finding.detector, finding.masked_key)
+    """结果排序：高价值文件置顶，其余按文件 → 行号 → 检测器 → 密钥。"""
+    return (
+        not finding.high_value,
+        finding.file,
+        finding.line,
+        finding.detector,
+        finding.masked_key,
+    )

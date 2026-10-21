@@ -53,6 +53,18 @@ PLACEHOLDER_EXACT: frozenset[str] = frozenset({
 #: 报告中展示的上下文最大长度（已脱敏）
 CONTEXT_MAX_CHARS: int = 120
 
+#: 高价值文件名模式（fnmatch，小写匹配）：泄露重灾区，报告标记并置顶
+HIGH_VALUE_FILE_PATTERNS: tuple[str, ...] = (
+    ".env",
+    ".env.*",
+    "*.env",
+    "*credential*",
+    "*secret*",
+    "id_rsa*",
+    "*.pem",
+    "*.key",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ScanLimits:

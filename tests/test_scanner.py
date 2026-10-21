@@ -97,3 +97,30 @@ def test_entropy_finding_in_full_scan(tmp_path: Path) -> None:
     assert [(f.detector, f.confidence) for f in result.findings] == [
         ("High-Entropy String", "medium")
     ]
+
+
+def test_env_file_findings_flagged_and_pinned_first(tmp_path: Path) -> None:
+    """.env 是泄露重灾区：标记高价值并置顶展示。"""
+    from conftest import FAKE_OPENAI, FAKE_PASSWORD
+
+    (tmp_path / "aaa.py").write_text(f'k = "{FAKE_OPENAI}"\n', encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        f'DB_PASSWORD="{FAKE_PASSWORD}"\n', encoding="utf-8"
+    )
+    result = Scanner().scan_path(tmp_path)
+    first = result.findings[0]
+    assert first.file == ".env"
+    assert first.high_value is True
+    assert result.findings[-1].file == "aaa.py"
+    assert result.findings[-1].high_value is False
+
+
+def test_is_high_value_patterns() -> None:
+    from zeroscan.scanner import is_high_value
+
+    assert is_high_value(".env")
+    assert is_high_value(".env.production")
+    assert is_high_value("prod.env")
+    assert is_high_value("id_rsa")
+    assert is_high_value("ServerCredentials.yaml")
+    assert not is_high_value("main.py")
