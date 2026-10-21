@@ -17,6 +17,7 @@ from __future__ import annotations
 import fnmatch
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -40,6 +41,25 @@ def is_high_value(filename: str) -> bool:
     """判断是否属于高价值文件（.env / 凭证 / 私钥等，小写匹配）。"""
     lowered = filename.lower()
     return any(fnmatch.fnmatchcase(lowered, pat) for pat in HIGH_VALUE_FILE_PATTERNS)
+
+
+def _decode_text(raw: bytes) -> str | None:
+    """把文件字节解码为文本；判定为二进制时返回 None。
+
+    支持 UTF-8 与 UTF-16（BOM 或无 BOM 启发式：ASCII 段的 UTF-16
+    编码每隔一个字节出现 NUL）。
+    """
+    head = raw[:_BINARY_SNIFF_BYTES]
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16", errors="replace")
+    if b"\x00" not in head:
+        return raw.decode("utf-8", errors="replace")
+    even, odd = head[0::2], head[1::2]
+    even_ratio = even.count(0) / max(len(even), 1)
+    odd_ratio = odd.count(0) / max(len(odd), 1)
+    if even_ratio > 0.8 or odd_ratio > 0.8:
+        return raw.decode("utf-16-le", errors="replace")
+    return None  # 含孤立 NUL，按二进制跳过
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,16 +166,34 @@ class Scanner:
         root = Path(root)
         result = ScanResult(target=target_label or str(root))
         start = time.perf_counter()
+        files: list[tuple[Path, str]] = []
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDED_DIRS)
             for name in sorted(filenames):
-                outcome = self._scan_file(Path(dirpath) / name, root)
-                if outcome.error is not None:
-                    result.errors.append(outcome.error)
-                else:
-                    result.scanned_files += outcome.scanned
-                    result.skipped_files += outcome.skipped
-                    result.findings.extend(outcome.findings)
+                path = Path(dirpath) / name
+                files.append((path, path.relative_to(root).as_posix()))
+
+        # 小仓库串行；大仓库线程池并行（结果事后排序，输出保持确定性）
+        if self.limits.scan_workers > 1 and len(files) >= 64:
+            with ThreadPoolExecutor(
+                max_workers=self.limits.scan_workers
+            ) as executor:
+                outcomes = list(
+                    executor.map(
+                        lambda item: self._scan_file(item[0], item[1]), files
+                    )
+                )
+        else:
+            outcomes = [self._scan_file(path, rel) for path, rel in files]
+
+        for outcome in outcomes:
+            if outcome.error is not None:
+                result.errors.append(outcome.error)
+            else:
+                result.scanned_files += outcome.scanned
+                result.skipped_files += outcome.skipped
+                result.findings.extend(outcome.findings)
+
         ignore_rules = load_ignore_rules(root / IGNORE_FILE)
         if ignore_rules:
             result.findings = apply_ignore(result.findings, ignore_rules)
@@ -165,20 +203,19 @@ class Scanner:
 
     # ---- 内部实现 ----
 
-    def _scan_file(self, path: Path, root: Path) -> _FileOutcome:
-        rel = path.relative_to(root).as_posix()
-
+    def _scan_file(self, path: Path, rel: str) -> _FileOutcome:
         if path.name.endswith(".min.js") or path.suffix.lower() in EXCLUDED_SUFFIXES:
             return _FileOutcome(rel, skipped=1)
         try:
             if path.stat().st_size > self.limits.max_file_bytes:
                 return _FileOutcome(rel, skipped=1)
-            with path.open("rb") as fh:
-                if b"\x00" in fh.read(_BINARY_SNIFF_BYTES):
-                    return _FileOutcome(rel, skipped=1)
-            text = path.read_text(encoding="utf-8", errors="replace")
+            raw = path.read_bytes()
         except OSError as exc:
             return _FileOutcome(rel, error=f"{rel}: 读取失败 ({exc})")
+
+        text = _decode_text(raw)
+        if text is None:
+            return _FileOutcome(rel, skipped=1)
 
         findings: list[Finding] = []
         seen: set[tuple[str, int, str]] = set()

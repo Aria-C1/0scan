@@ -124,3 +124,30 @@ def test_is_high_value_patterns() -> None:
     assert is_high_value("id_rsa")
     assert is_high_value("ServerCredentials.yaml")
     assert not is_high_value("main.py")
+
+
+def test_parallel_scan_matches_serial(tmp_path: Path) -> None:
+    """并行与串行结果完全一致（排序保证确定性）。"""
+    from zeroscan.config import ScanLimits
+    from conftest import FAKE_OPENAI
+
+    for i in range(80):
+        (tmp_path / f"m{i:03d}.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "leak.py").write_text(f'k = "{FAKE_OPENAI}"\n', encoding="utf-8")
+
+    serial = Scanner(limits=ScanLimits(scan_workers=1)).scan_path(tmp_path)
+    parallel = Scanner(limits=ScanLimits(scan_workers=4)).scan_path(tmp_path)
+    assert serial.findings == parallel.findings
+    assert serial.scanned_files == parallel.scanned_files == 81
+
+
+def test_utf16_files_are_scanned(tmp_path: Path) -> None:
+    """带 BOM 与无 BOM 的 UTF-16 文件不应被当二进制跳过。"""
+    (tmp_path / "bom.txt").write_text(
+        'password = "hunter2hunter2hunter2"\n', encoding="utf-16"
+    )
+    (tmp_path / "nobom.txt").write_bytes(
+        'password = "hunter2hunter2hunter2"\n'.encode("utf-16-le")
+    )
+    result = Scanner().scan_path(tmp_path)
+    assert sorted(f.file for f in result.findings) == ["bom.txt", "nobom.txt"]
