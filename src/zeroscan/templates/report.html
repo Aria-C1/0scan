@@ -103,6 +103,7 @@
             <span class="zs-finding-pos">
                 {% if item.high_value %}<span class="zs-tag zs-tag-high">高危文件</span>{% endif %}
                 {% if item.confidence == "medium" %}<span class="zs-tag zs-tag-medium">中置信度</span>{% endif %}
+                {% if item.commit %}<code>{{ item.commit }}</code>{% endif %}
                 {{ item.file }} · 第 {{ item.line }} 行
             </span>
         </div>

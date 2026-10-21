@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from . import __version__
 from .detectors import DETECTORS, Detector
 from .history import scan_history
 from .repo import RepoError, fetch_repo
-from .report import render_json, write_html
+from .report import render_json, write_html, write_sarif
 from .rules import RuleError, load_custom_detectors
 from .scanner import Scanner
 from .config import RULES_FILE
@@ -33,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan_p.add_argument("target", help="GitHub https 地址、本地路径，或 demo（离线演示）")
     scan_p.add_argument("--json", action="store_true", help="以 JSON 输出结果")
     scan_p.add_argument("--html", metavar="PATH", help="同时生成 HTML 报告文件")
+    scan_p.add_argument("--sarif", metavar="PATH", help="同时生成 SARIF 报告（GitHub Code Scanning）")
     scan_p.add_argument("--config", metavar="PATH", help="自定义规则文件 zeroscan.toml（默认自动加载当前目录）")
     scan_p.add_argument("--full-history", action="store_true", help="完整克隆并扫描全部提交历史（较慢）")
     scan_p.add_argument("--timeout", type=int, default=60, help="克隆超时秒数（默认 60）")
@@ -72,6 +74,9 @@ def cmd_scan(args: argparse.Namespace) -> int:
     if args.html:
         path = write_html(result, args.html)
         print(f"📄 HTML 报告已生成：{path}")
+    if args.sarif:
+        path = write_sarif(result, args.sarif)
+        print(f"📄 SARIF 报告已生成：{path}")
 
     return 1 if result.findings else 0
 
